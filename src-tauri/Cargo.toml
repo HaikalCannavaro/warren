@@ -1,0 +1,43 @@
+[package]
+name = "harbor"
+version = "0.2.0"
+description = "Warren — SSH terminal and Hermes workspace"
+authors = ["Warren contributors"]
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+name = "harbor_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-stronghold = "2.4.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+russh = { version = "0.64.1", default-features = false, features = ["ring", "rsa"] }
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util = "0.3"
+zeroize = "1"
+base64 = "0.22"
+minisign-verify = "0.3"
+
+[target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
+tauri-plugin-updater = { version = "=2.14.0", default-features = false, features = ["rustls-tls"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-harbor-android-updater = { path = "android-updater" }
+semver = "1"
+sha2 = "0.10"
+
+[profile.dev.package.scrypt]
+opt-level = 3
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,8 @@
+{
+  "default": "warren-icon.svg",
+  "bg_color": "#101D28",
+  "android_bg": "warren-background.svg",
+  "android_fg": "warren-android-foreground.svg",
+  "android_fg_scale": 85,
+  "android_monochrome": "warren-monochrome.svg"
+}

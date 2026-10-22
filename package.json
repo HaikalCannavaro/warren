@@ -1,0 +1,49 @@
+{
+  "name": "warren-terminal-hermes",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --configLoader native",
+    "build": "tsc -b && vite build --configLoader native",
+    "preview": "vite preview --configLoader native --host 127.0.0.1",
+    "test": "vitest run --configLoader native",
+    "test:watch": "vitest --configLoader native",
+    "test:release": "node --test scripts/*.test.mjs",
+    "release:configure": "node scripts/release.mjs configure",
+    "release:package": "node scripts/release.mjs package",
+    "release:publish": "node scripts/release.mjs publish",
+    "desktop:release": "tauri build --config src-tauri/tauri.release.conf.json",
+    "android:release": "tauri android build --apk --config src-tauri/tauri.release.conf.json",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "android:init": "tauri android init && npm run icons:generate",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build",
+    "icons:generate": "tauri icon public/brand/icon-manifest.json"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-stronghold": "^2.0.0",
+    "@xterm/xterm": "^6.0.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.0.0",
+    "remark-gfm": "^4.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.0.0",
+    "jsdom": "^26.0.0"
+  }
+}
