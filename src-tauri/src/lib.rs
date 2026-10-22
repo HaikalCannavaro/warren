@@ -1,4 +1,5 @@
 mod hermes;
+mod gateway;
 mod ssh;
 mod updater;
 #[cfg(target_os = "android")]
@@ -10,6 +11,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .manage(ssh::SshState::default())
+        .manage(gateway::GatewayState::default())
         .setup(|app| {
             let data_dir = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -28,6 +30,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 window.state::<ssh::SshState>().disconnect_all();
+                window.state::<gateway::GatewayState>().disconnect_all();
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -38,6 +41,10 @@ pub fn run() {
             ssh::ssh_disconnect,
             hermes::probe_hermes,
             hermes::chat_stream,
+            gateway::gateway_connect,
+            gateway::gateway_send,
+            gateway::gateway_disconnect,
+            gateway::gateway_disconnect_all,
             updater::get_update_info,
             updater::check_for_update,
             updater::download_update,

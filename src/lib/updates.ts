@@ -1,3 +1,4 @@
+import { translate } from './i18n';
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 
 export interface UpdateInfo {
@@ -11,7 +12,7 @@ export interface UpdateProgress { event: 'progress'; downloaded: number; total?:
 export interface InstallResult { status: 'permissionRequired' | 'installerOpened' | 'relaunching'; }
 
 function requireNative() {
-  if (!isTauri()) throw new Error('Pembaruan hanya tersedia di aplikasi native Windows atau Android.');
+  if (!isTauri()) throw new Error(translate("Updates are available in the Windows and Android apps.", "Pembaruan hanya tersedia di aplikasi native Windows atau Android."));
 }
 export async function getUpdateInfo(): Promise<UpdateInfo> {
   requireNative();

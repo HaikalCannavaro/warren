@@ -1,5 +1,43 @@
 # Pengujian Warren
 
+## Profile, panel berdampingan, dan navigasi — 23 Oktober 2026
+
+- **237 tes frontend dalam 15 berkas lulus**, termasuk metadata Profile, penyimpanan identitas per balasan, metadata yang hilang, callback koneksi lama, form Profile/model terpisah, panel tanpa overlay, dan komponen chat/terminal yang tetap terpasang saat navigasi.
+- **25 tes alat rilis lulus.** TypeScript dan build produksi lulus. JavaScript 883,12 KB (gzip 252,67 KB); peringatan ukuran chunk Vite di atas 500 KB tetap ada.
+- Browser diperiksa dengan data simulasi pada **1280 × 720**, **1024 × 768**, dan **390 × 844**. Panel selalu mengikuti alur flex; selisih overlap nol (toleransi pembulatan subpiksel). Pada 1024 px, chat 504,4 px dengan kedua panel terbuka dan 986,4 px setelah keduanya disembunyikan. Pada ponsel, chat sekitar 201,3 px dan panel 171,5 px, tanpa overflow dokumen horizontal.
+- Bubble Agent menempel di sisi kiri dan pengguna di kanan. Saat panel berubah lebar, sisi bubble tetap mengikuti area chat. Isi log tetap pada lebar target di WebView yang mendukung container queries; shell panel mengatur pemotongan dan animasi. Fallback layout tetap tersedia pada WebView lama.
+- Header menampilkan `Personal VPS · SIMULASI` + `Profile: Leveret`, dan bubble balasan memakai `Leveret`. Menu rename conversation tidak ada. Form menampilkan Profile terpisah dari model AI di Advanced.
+- Navigasi Terminal → Agent → Connections → Settings memakai fade ringan dan gelombang menu aktif. Draft `/`, pilihan buka/tutup panel, dan komponen Agent tetap terjaga saat berpindah menu. Aturan reduced-motion menonaktifkan animasi/transisi.
+- Nama profile Gateway berasal dari metadata `info.profile_name`; `profile_id` dan model tidak dipakai sebagai nama profile. Pengujian memakai mock protokol, **belum diuji dengan Hermes/VPS nyata**. Installer Windows dan APK baru belum dibuat atau divalidasi; batas toolchain native di bawah tetap berlaku.
+
+Hasil berikut merupakan catatan tahap sebelumnya; perilaku drawer/overlay pada catatan lama telah diganti oleh panel berdampingan.
+
+## Slash command, satu ruang chat, dan bahasa — 23 Oktober 2026
+
+- **205 tes frontend dalam 15 berkas lulus**, termasuk protokol Gateway, batas perintah, penyimpanan sesi sebelum pengiriman, pemulihan hasil tidak diketahui, satu ruang chat, dan pergantian bahasa.
+- **25 tes alat rilis lulus.** Pemeriksaan TypeScript dan build frontend produksi juga lulus. JavaScript 881,63 KB (gzip 252,46 KB); peringatan ukuran chunk Vite di atas 500 KB masih ada.
+- Default antarmuka adalah English. English / Bahasa Indonesia tersedia di Settings → Language. Tes memeriksa pembaruan label dan `html.lang`, penyimpanan pilihan, storage yang tidak tersedia, serta perubahan bahasa tanpa mereset terminal, formulir, draft, atau mengubah payload/pesan Agent.
+- Browser diperiksa pada **1280 × 720** dan **390 × 844** dengan fixture data contoh. Sidebar tidak lagi menampilkan Personal workspace, PREVIEW, atau Mode pratinjau. Keterangan demo berada di Settings; konten fixture tetap diberi penanda simulasi.
+- Pilihan Indonesia bertahan setelah reload browser. Tampilan Settings mobile tidak mengalami overflow horizontal. Drawer Tool Activity dapat dibuka dan ditutup dengan Escape, fokus kembali ke tombolnya, dan draft `/` tetap ada. Menu slash tampil dalam bahasa antarmuka. Log browser akhir tidak berisi error/warning.
+- Panel daftar percakapan dihapus. `/new` membuat sesi baru; pembukaan chat dari Connections melanjutkan chat yang ada. Pilihan terakhir dipulihkan setelah membuka brankas. Riwayat tersimpan tidak dihapus.
+- Integrasi mengacu pada Hermes **0.22.4**, canonical Gateway dengan `session_authority` dan `durable-admission-v1`. Pengujian protokol memakai mock transport, **belum terhubung ke VPS/Hermes nyata**.
+- **12 tes transport Gateway Rust tersedia tetapi belum dapat dijalankan.** Kompilasi MSVC terhenti sebelum kode aplikasi karena `link.exe` tidak tersedia. Installer Windows, APK, dan penyimpanan native pada perangkat belum tervalidasi untuk perubahan ini. Source belum dipush atau dirilis.
+- Source dikemas sebagai ZIP tanpa dependensi/build/cache/kredensial. Tidak disertakan patch yang dapat membawa kembali kredensial lama dari konteks penghapusan dokumentasi.
+
+Lihat [SLASH-COMMANDS.md](SLASH-COMMANDS.md) untuk koneksi Gateway dan [AGENT-WORKSPACE.md](AGENT-WORKSPACE.md) untuk perilaku antarmuka. Hasil di bawah adalah catatan tahap sebelumnya.
+
+## Pembaruan panel Agent — 23 Oktober 2026
+
+- **88 tes dalam 12 berkas lulus**, termasuk log per percakapan, pemulihan status terputus, callback terlambat, panel tersembunyi, akses keyboard log, dan dialog yang dibuka di atas drawer.
+- **TypeScript dan build frontend lulus.** JavaScript sekitar 826 KB sebelum gzip; peringatan Vite tentang chunk di atas 500 KB tetap ada.
+- Preview nyata komponen aplikasi diperiksa di browser pada ukuran **1280 × 720** dan **390 × 844**, memakai fixture lokal dengan banner **DATA SIMULASI**. Chat pengguna di kanan dan Agent di kiri, lebar chat bertambah saat panel dilipat, draft tetap ada, drawer dapat ditutup dengan Escape, fokus berpindah dengan benar, dan tidak ada overflow horizontal pada ukuran yang diperiksa.
+- Dot sesi memiliki animasi pulse; aturan CSS reduced-motion mematikan animasi/transisi. Tidak ada error atau warning di log browser yang diamati pada pemeriksaan akhir.
+- Pengujian ini tidak menjalankan Hermes/VPS nyata, build installer Windows baru, atau APK baru. Mock IPC dan data simulasi tidak membuktikan koneksi atau penyimpanan native. Source fitur belum diterbitkan sebagai rilis.
+
+Petunjuk penggunaan dan integrasi patch tersedia di [AGENT-WORKSPACE.md](AGENT-WORKSPACE.md).
+
+## Catatan baseline sebelumnya
+
 Status berikut adalah hasil validasi pada 22 Oktober 2026. Kelulusan frontend tidak membuktikan koneksi atau penyimpanan native berfungsi pada Windows maupun Android.
 
 ## Hasil yang sudah tersedia

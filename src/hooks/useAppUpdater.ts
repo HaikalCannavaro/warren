@@ -1,3 +1,4 @@
+import { translate } from '../lib/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import packageInfo from '../../package.json';
 import { checkForUpdate, downloadUpdate, getUpdateInfo, installUpdate, type AppRelease, type InstallResult, type UpdateInfo } from '../lib/updates';
@@ -15,7 +16,7 @@ interface UpdaterState {
   progress: { downloaded: number; total?: number } | null;
 }
 export type RunInstallation = (action: () => Promise<InstallResult>) => Promise<InstallResult>;
-const asMessage = (error: unknown) => error instanceof Error ? error.message : typeof error === 'string' ? error : 'Pembaruan belum dapat diproses. Coba lagi secara manual.';
+const asMessage = (error: unknown) => error instanceof Error ? error.message : typeof error === 'string' ? error : translate("The update could not be processed. Try again manually.", "Pembaruan belum dapat diproses. Coba lagi secara manual.");
 
 export function useAppUpdater({ preview, runInstall }: { preview: boolean; runInstall: RunInstallation }) {
   const [state, setState] = useState<UpdaterState>(() => ({ phase: preview ? 'unconfigured' : 'checking', info: null, release: null, error: null, errorStage: null, operation: preview ? null : 'metadata', downloaded: false, progress: null }));
@@ -96,7 +97,7 @@ export function useAppUpdater({ preview, runInstall }: { preview: boolean; runIn
     try {
       const result = await installation.current(installUpdate);
       if (active(id)) patch({ phase: result.status === 'relaunching' ? 'installing' : result.status });
-    } catch (error) { if (active(id)) patch({ phase: 'error', error: `Cek pembaruan lagi sebelum mencoba memasang. ${asMessage(error)}`, errorStage: 'install', downloaded: false, release: null, progress: null }); }
+    } catch (error) { if (active(id)) patch({ phase: 'error', error: `${translate("Check for updates again before trying to install.", "Cek pembaruan lagi sebelum mencoba memasang.")} ${asMessage(error)}`, errorStage: 'install', downloaded: false, release: null, progress: null }); }
     finally { finish(id); }
   };
 

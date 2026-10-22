@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getUpdateInfo, checkForUpdate, downloadUpdate, installUpdate } from './updates';
+import { setLanguage } from './i18n';
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(), channels: [] as { onmessage?: (event: unknown) => void }[] }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: native.invoke, isTauri: native.isTauri, Channel: class { constructor() { native.channels.push(this); } } }));
-beforeEach(() => { vi.clearAllMocks(); native.channels.length = 0; native.isTauri.mockReturnValue(true); native.invoke.mockResolvedValue(undefined); });
+beforeEach(() => { setLanguage('id'); vi.clearAllMocks(); native.channels.length = 0; native.isTauri.mockReturnValue(true); native.invoke.mockResolvedValue(undefined); });
 
 describe('native update adapter', () => {
   it('uses the specified commands and forwards download progress through a Channel', async () => {
@@ -21,6 +22,11 @@ describe('native update adapter', () => {
   it('rejects browser calls without invoking native update operations', async () => {
     native.isTauri.mockReturnValue(false);
     await expect(checkForUpdate()).rejects.toThrow('aplikasi native');
+    expect(native.invoke).not.toHaveBeenCalled();
+  });
+  it('explains browser limitations in English when selected', async () => {
+    setLanguage('en'); native.isTauri.mockReturnValue(false);
+    await expect(checkForUpdate()).rejects.toThrow('Updates are available in the Windows and Android apps.');
     expect(native.invoke).not.toHaveBeenCalled();
   });
 });

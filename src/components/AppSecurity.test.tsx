@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setLanguage } from '../lib/i18n';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import App from '../App';
 import type { useWorkspace } from '../hooks/useWorkspace';
@@ -7,6 +8,8 @@ import type { useWorkspace } from '../hooks/useWorkspace';
 const hook = vi.hoisted(() => vi.fn());
 vi.mock('../hooks/useWorkspace', () => ({ useWorkspace: hook }));
 vi.mock('./TerminalWorkspace', () => ({ TerminalWorkspace: () => <div/> }));
+beforeEach(() => setLanguage('id'));
+
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe('vault UI state', () => {

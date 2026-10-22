@@ -1,0 +1,52 @@
+/* Change animation names to replay the entrance without replacing the page or its sessions. */
+.page-content[data-navigated="true"] {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(.2,.7,.3,1);
+  animation-iteration-count: 1;
+}
+.page-content[data-navigated="true"].page-terminal { animation-name: enter-terminal-page; }
+.page-content[data-navigated="true"].page-hermes { animation-name: enter-agent-page; }
+.page-content[data-navigated="true"].page-connections { animation-name: enter-connections-page; }
+.page-content[data-navigated="true"].page-settings { animation-name: enter-settings-page; }
+@keyframes enter-terminal-page { from { opacity: .55; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes enter-agent-page { from { opacity: .55; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes enter-connections-page { from { opacity: .55; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes enter-settings-page { from { opacity: .55; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+.main-nav .nav-item, .bottom-nav > button {
+  position: relative;
+  isolation: isolate;
+  transition: background 240ms ease, color 240ms ease;
+}
+.nav-activation-wave {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+}
+.nav-activation-wave::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 30%;
+  width: 220%;
+  aspect-ratio: 1;
+  border: 1px solid #a1f1d94d;
+  border-radius: 50%;
+  background: radial-gradient(circle, #6be2c407 52%, #6be2c42b 70%, transparent 72%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.08);
+  animation: navigation-wave 520ms cubic-bezier(.2,.65,.3,1) 1;
+}
+@keyframes navigation-wave {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.08); }
+  25% { opacity: .65; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-content[data-navigated="true"] { animation: none; }
+  .nav-activation-wave { display: none; }
+  .main-nav .nav-item, .bottom-nav > button { transition: none; }
+}

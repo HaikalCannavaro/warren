@@ -1,3 +1,4 @@
+import { translate } from './i18n';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
 import { Stronghold } from '@tauri-apps/plugin-stronghold';
 import type { Store } from '@tauri-apps/plugin-stronghold';
@@ -9,11 +10,11 @@ export class WorkspaceVault {
   private constructor(private stronghold: Stronghold, private store: Store) {}
 
   static async open(password:string):Promise<{vault:WorkspaceVault;state:SavedState}> {
-    if (password.length < 12) throw new Error('Password utama minimal 12 karakter. Simpan dengan aman; tidak ada pemulihan password.');
+    if (password.length < 12) throw new Error(translate("The master password needs at least 12 characters. Keep it safe; there is no password recovery.", "Password utama minimal 12 karakter. Simpan dengan aman; tidak ada pemulihan password."));
     const path=await join(await appLocalDataDir(),'harbor.hold');
     let stronghold:Stronghold;
     try { stronghold=await Stronghold.load(path,password); }
-    catch { throw new Error('Brankas tidak dapat dibuka. Periksa password utama dan akses penyimpanan.'); }
+    catch { throw new Error(translate("Could not unlock the vault. Check your master password and storage access.", "Brankas tidak dapat dibuka. Periksa password utama dan akses penyimpanan.")); }
     let client;
     try { client=await stronghold.loadClient('harbor-workspace-v1'); }
     catch { client=await stronghold.createClient('harbor-workspace-v1'); }

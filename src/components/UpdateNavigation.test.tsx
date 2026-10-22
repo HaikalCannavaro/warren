@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { setLanguage } from '../lib/i18n';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import type { useWorkspace } from '../hooks/useWorkspace';
 
@@ -9,6 +10,8 @@ const updates = vi.hoisted(() => ({ getUpdateInfo: vi.fn(), checkForUpdate: vi.f
 vi.mock('../hooks/useWorkspace', () => ({ useWorkspace: workspaceHook }));
 vi.mock('../lib/updates', () => updates);
 vi.mock('./TerminalWorkspace', () => ({ TerminalWorkspace: () => <div/> }));
+beforeEach(() => setLanguage('id'));
+
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe('updater workspace lifetime', () => {

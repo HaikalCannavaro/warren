@@ -2,6 +2,8 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspace } from './useWorkspace';
 import { emptyState } from '../lib/domain';
+import { basicSlashCommands } from '../lib/slashCommands';
+import { setLanguage } from '../lib/i18n';
 import type { HermesEvent, HermesRequest, SavedState, SshEvent, SshRequest, VpsProfile } from '../types';
 
 const f=vi.hoisted(()=>({
@@ -9,7 +11,16 @@ const f=vi.hoisted(()=>({
   write:vi.fn(),close:vi.fn(),open:vi.fn(),probe:vi.fn(),connect:vi.fn(),disconnect:vi.fn(),stream:vi.fn(),
   writeSsh:vi.fn(),resizeSsh:vi.fn(),onDesktopClose:vi.fn(),destroyWindow:vi.fn(),unlisten:vi.fn(),
   closeHandler:undefined as (()=>Promise<void>)|undefined,
+  gatewayConnect:vi.fn(),gatewaySession:vi.fn(),gatewayCatalog:vi.fn(),gatewayCommand:vi.fn(),gatewaySend:vi.fn(),gatewayClose:vi.fn(),
+  gatewayProfile:vi.fn(),gatewayObservers:[] as ((sessionId:string,profile:string|undefined)=>void)[],
+  gatewayClosed:false,
 }));
+vi.mock('../lib/gatewayClient',()=>({GatewayClient:class {
+  constructor(_profile:unknown,onProfile?:(sessionId:string,profile:string|undefined)=>void){f.gatewayClosed=false;if(onProfile)f.gatewayObservers.push(onProfile);}
+  isClosed(){return f.gatewayClosed;}
+  connect=f.gatewayConnect;ensureSession=f.gatewaySession;catalog=f.gatewayCatalog;command=f.gatewayCommand;send=f.gatewaySend;close=f.gatewayClose;
+  getSessionProfile=f.gatewayProfile;
+}}));
 vi.mock('../lib/vault',()=>({WorkspaceVault:{open:f.open}}));
 vi.mock('../lib/native',()=>({
   nativeAvailable:()=>true,probeSsh:f.probe,connectSsh:f.connect,disconnectSsh:f.disconnect,
@@ -18,6 +29,8 @@ vi.mock('../lib/native',()=>({
 }));
 const profile:VpsProfile={id:'vps-1',name:'My VPS',host:'example.test',port:22,username:'deploy',auth:'password',password:'secret',privateKey:'',passphrase:''};
 beforeEach(()=>{
+  setLanguage('id');
+  f.gatewayObservers=[];
   vi.resetAllMocks(); f.state=emptyState(); f.state.vps=[{...profile}];
   f.state.hermes=[{id:'hermes-1',name:'Hermes',url:'https://hermes.example/v1',token:'token',model:'hermes-agent'}];
   f.write.mockResolvedValue(undefined);f.close.mockResolvedValue(undefined);f.disconnect.mockResolvedValue(undefined);
@@ -28,12 +41,220 @@ beforeEach(()=>{
   f.probe.mockResolvedValue('SHA256:verified');
   f.connect.mockImplementation(async(_request:SshRequest,onEvent:(e:SshEvent)=>void)=>{onEvent({type:'status',status:'connected'});});
   f.stream.mockImplementation(async(_request:HermesRequest,onEvent:(e:HermesEvent)=>void)=>{onEvent({type:'delta',text:'Jawaban'});onEvent({type:'done',finishReason:'stop'});});
+  f.gatewayConnect.mockResolvedValue(undefined);f.gatewaySession.mockResolvedValue({sessionId:'canonical-1'});
+  f.gatewayCatalog.mockResolvedValue(basicSlashCommands().map(c=>({...c,available:true,reason:undefined})));
+  f.gatewayCommand.mockResolvedValue('Model diperbarui.');f.gatewayClose.mockResolvedValue(undefined);
+  f.gatewaySend.mockImplementation(async(_id:string,_text:string,_submission:string,onEvent:(e:HermesEvent)=>void)=>{onEvent({type:'delta',text:'draft'});onEvent({type:'replace',text:'Final response'});onEvent({type:'done',finishReason:'stop'});});
 });
 afterEach(()=>cleanup());
 async function opened(){const h=renderHook(()=>useWorkspace());await act(async()=>{await h.result.current.unlock('a long password');});return h;}
 function deferred(){let resolve!:()=>void;let reject!:(reason:Error)=>void;const promise=new Promise<void>((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};}
 
+describe('Gateway workspace integration',()=>{
+  const gateway=()=>{f.state!.hermes[0]={...f.state!.hermes[0],transport:'gateway',url:'wss://hermes.example/api/ws',model:''};};
+  it('persists confirmed profile identity and snapshots it per reply without changing routing',async()=>{
+    gateway();f.state!.hermes[0].agentProfile='Configured label';f.gatewayProfile.mockReturnValue('Leveret');
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Hello');});
+    f.gatewaySend.mockImplementationOnce(async(_session:string,_text:string,_submission:string,onEvent:(e:HermesEvent)=>void)=>{
+      expect((f.write.mock.calls.at(-1)![0] as SavedState).conversations[0].agentProfile).toBe('Leveret');
+      onEvent({type:'delta',text:'First response',agentProfile:'Leveret'});onEvent({type:'done',finishReason:'stop',agentProfile:'Leveret'});
+    });
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(h.result.current.state.conversations[0].messages.at(-1)?.agentProfile).toBe('Leveret');
+    act(()=>{f.gatewayObservers[0]('canonical-1','Research');h.result.current.setDraft(id,'Next');});
+    f.gatewaySend.mockImplementationOnce(async(_session:string,_text:string,_submission:string,onEvent:(e:HermesEvent)=>void)=>{
+      onEvent({type:'delta',text:'Second response',agentProfile:'Research'});onEvent({type:'done',finishReason:'stop',agentProfile:'Research'});
+    });
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    const conversation=h.result.current.state.conversations[0];
+    expect(conversation.agentProfile).toBe('Research');
+    expect(conversation.messages.filter(m=>m.role==='assistant').map(m=>m.agentProfile)).toEqual(['Leveret','Research']);
+    expect(f.gatewaySend.mock.calls.map(call=>call.slice(0,2))).toEqual([['canonical-1','Hello'],['canonical-1','Next']]);
+    expect(f.state!.hermes[0].model).toBe('');
+  });
+  it('ignores profile metadata for another session or a closed workspace',async()=>{
+    gateway();f.gatewayProfile.mockReturnValue('Leveret');
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
+    await act(async()=>{await h.result.current.loadCommands(id);});
+    act(()=>f.gatewayObservers[0]('other-session','Other'));
+    expect(h.result.current.state.conversations[0].agentProfile).toBe('Leveret');
+    await act(async()=>{await h.result.current.lock();});
+    act(()=>f.gatewayObservers[0]('canonical-1','Late profile'));
+    expect(h.result.current.state.conversations).toEqual([]);
+  });
+  it('invalidates confirmed profile identity when credentials change and ignores the retired connection',async()=>{
+    gateway();f.gatewayProfile.mockReturnValue('Leveret');
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
+    await act(async()=>{await h.result.current.loadCommands(id);});
+    const retiredObserver=f.gatewayObservers[0];
+    act(()=>{h.result.current.saveHermes({...h.result.current.state.hermes[0],token:'replacement-token'});retiredObserver('canonical-1','Late profile');});
+    expect(h.result.current.state.conversations[0].agentProfile).toBeUndefined();
+    f.gatewayProfile.mockReturnValue('Research');
+    await act(async()=>{await h.result.current.loadCommands(id);});
+    act(()=>retiredObserver('canonical-1','Late profile'));
+    expect(h.result.current.state.conversations[0].agentProfile).toBe('Research');
+  });
+  it.each([undefined,'Configured profile'])('clears stale reply identity when a refreshed Gateway profile is missing (fallback %s)',async fallback=>{
+    gateway();f.state!.hermes[0].agentProfile=fallback;
+    f.state!.conversations=[{id:'saved',profileId:'hermes-1',title:'Chat',draft:'Next',createdAt:1,gatewaySessionId:'canonical-1',agentProfile:'Leveret',messages:[{id:'old',role:'assistant',content:'Previous reply',createdAt:1,status:'complete',agentProfile:'Leveret'}]}];
+    f.gatewayProfile.mockReturnValue('Leveret');
+    const h=await opened();await act(async()=>{await h.result.current.loadCommands('saved');});
+    f.gatewaySend.mockImplementationOnce(async(_session:string,_text:string,_submission:string,onEvent:(e:HermesEvent)=>void)=>{
+      // The per-send session.resume no longer confirms a profile, even though the
+      // cached session from the prior catalog load did. Metadata must clear it.
+      f.gatewayProfile.mockReturnValue(undefined);f.gatewayObservers[0]('canonical-1',undefined);
+      onEvent({type:'delta',text:'New reply',agentProfile:undefined});onEvent({type:'done',finishReason:'stop',agentProfile:undefined});
+    });
+    await act(async()=>{await h.result.current.sendMessage('saved');});
+    expect(h.result.current.state.conversations[0].agentProfile).toBeUndefined();
+    expect(h.result.current.state.conversations[0].messages.filter(m=>m.role==='assistant').map(m=>m.agentProfile)).toEqual(['Leveret',fallback]);
+  });
+  it('releases idle connections before opening more conversations than the native limit',async()=>{
+    gateway();const h=await opened();const ids:string[]=[];
+    for(let index=0;index<8;index++){
+      let id='';act(()=>{id=h.result.current.createConversation('hermes-1');ids.push(id);});
+      await act(async()=>{await h.result.current.loadCommands(id);});
+    }
+    expect(f.gatewayClose).toHaveBeenCalled();
+    expect(h.result.current.state.conversations.find(c=>c.id===ids[0])?.gatewaySessionId).toBe('canonical-1');
+    await act(async()=>{await h.result.current.loadCommands(ids[0]);});
+    expect(f.gatewaySession).toHaveBeenLastCalledWith('canonical-1');
+  });
+  it('reconnects a closed idle socket only on a manual action and resumes its stored session',async()=>{
+    gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
+    await act(async()=>{await h.result.current.loadCommands(id);});
+    f.gatewayClosed=true;
+    expect(f.gatewayConnect).toHaveBeenCalledOnce();
+    await act(async()=>{await h.result.current.loadCommands(id);});
+    expect(f.gatewayConnect).toHaveBeenCalledTimes(2);
+    expect(f.gatewaySession).toHaveBeenLastCalledWith('canonical-1');
+  });
+  it('shares one replacement connection when catalog retry overlaps a command',async()=>{
+    gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
+    await act(async()=>{await h.result.current.loadCommands(id);});f.gatewayClosed=true;
+    const closing=deferred();f.gatewayClose.mockReturnValueOnce(closing.promise);
+    let loading!:Promise<void>,running!:Promise<void>;
+    act(()=>{loading=h.result.current.loadCommands(id);running=h.result.current.runCommand(id,'/status');});
+    await act(async()=>{closing.resolve();await Promise.all([loading,running]);});
+    expect(f.gatewayConnect).toHaveBeenCalledTimes(2);
+  });
+  it('persists canonical identity before sending one prompt and reconciles final text',async()=>{
+    gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Hello');});
+    f.gatewaySend.mockImplementationOnce(async(_session:string,_text:string,_submission:string,onEvent:(event:HermesEvent)=>void)=>{
+      expect((f.write.mock.calls.at(-1)![0] as SavedState).conversations[0].gatewaySessionId).toBe('canonical-1');
+      onEvent({type:'delta',text:'partial'});onEvent({type:'replace',text:'Authoritative final'});onEvent({type:'done',finishReason:'stop'});
+    });
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(f.gatewaySend.mock.calls[0].slice(0,2)).toEqual(['canonical-1','Hello']);expect(f.stream).not.toHaveBeenCalled();
+    expect(h.result.current.state.conversations[0].messages.at(-1)).toMatchObject({content:'Authoritative final',status:'complete'});
+  });
+  it('resumes the saved identity and keeps controls outside model history',async()=>{
+    gateway();f.state!.conversations=[{id:'saved',profileId:'hermes-1',title:'Saved',createdAt:1,messages:[],draft:'/status',gatewaySessionId:'stored-42'}];
+    const h=await opened();await act(async()=>{await h.result.current.sendMessage('saved');});
+    expect(f.gatewaySession).toHaveBeenCalledWith('stored-42');expect(f.gatewayCommand).toHaveBeenCalledWith('canonical-1','/status');
+    expect(h.result.current.state.conversations[0].messages).toEqual([]);
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('complete');
+  });
+  it('does not dispatch when saving a newly created server identity fails',async()=>{
+    gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Hello');});
+    f.write.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('disk full'));
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(f.gatewaySend).not.toHaveBeenCalled();expect(f.gatewayClose).toHaveBeenCalled();
+    expect(h.result.current.state.conversations[0].messages.at(-1)?.status).toBe('error');
+  });
+  it('keeps a running chat busy after a stop command completes and blocks vault lock',async()=>{
+    gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Work');});
+    const stream=deferred();f.gatewaySend.mockReturnValueOnce(stream.promise);let sending!:Promise<void>;
+    await act(async()=>{sending=h.result.current.sendMessage(id);});
+    await act(async()=>{await h.result.current.runCommand(id,'/stop');await h.result.current.lock();});
+    expect(h.result.current.streamingIds.has(id)).toBe(true);expect(h.result.current.ready).toBe(true);expect(f.close).not.toHaveBeenCalled();
+    await act(async()=>{stream.resolve();await sending;});
+  });
+  it('marks an interrupted command unknown and ignores late completion after window close',async()=>{
+    gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
+    const command=deferred();f.gatewayCommand.mockImplementationOnce(async()=>{await command.promise;return 'late';});let running!:Promise<void>;
+    await act(async()=>{running=h.result.current.runCommand(id,'/model example');});
+    await act(async()=>{await f.closeHandler!();command.resolve();await running;});
+    expect(f.gatewayClose).toHaveBeenCalled();expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('unknown');
+  });
+  it('prevents installation and duplicate controls while a command is pending',async()=>{
+    gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
+    const command=deferred();f.gatewayCommand.mockImplementationOnce(async()=>{await command.promise;return 'done';});let running!:Promise<void>;
+    await act(async()=>{running=h.result.current.runCommand(id,'/compact');});
+    const install=vi.fn();await act(async()=>{await h.result.current.runCommand(id,'/compact');await expect(h.result.current.runUpdateInstallation(install)).rejects.toThrow();});
+    expect(f.gatewayCommand).toHaveBeenCalledOnce();expect(install).not.toHaveBeenCalled();
+    await act(async()=>{command.resolve();await running;});
+  });
+  it('preserves unresolved mutation state even after the display history is pruned',async()=>{
+    gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
+    f.gatewayCommand.mockRejectedValueOnce(Object.assign(new Error('Connection lost'),{uncertain:true}));
+    await act(async()=>{await h.result.current.runCommand(id,'/model example');});
+    for(let i=0;i<101;i++)await act(async()=>{await h.result.current.runCommand(id,'/help');});
+    expect(h.result.current.state.conversations[0].commandResults).toHaveLength(100);
+    act(()=>h.result.current.setDraft(id,'Do not start'));
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(f.gatewaySend).not.toHaveBeenCalled();
+    expect(h.result.current.state.conversations[0].gatewayStateUncertain).toBe(true);
+  });
+});
+
+describe('single Agent chat space',()=>{
+  const savedChat=(id:string,createdAt:number)=>({id,profileId:'hermes-1',title:id,createdAt,draft:'saved draft',messages:[]});
+  it('restores the last selected chat when the vault opens',async()=>{
+    f.state!.conversations=[savedChat('older-selected',1),savedChat('newer',2)];f.state!.activeConversationId='older-selected';
+    const h=await opened();expect(h.result.current.activeConversationId).toBe('older-selected');
+  });
+  it('migrates older vaults to their latest existing chat without creating a session',async()=>{
+    f.state!.conversations=[savedChat('old',1),savedChat('latest',3),savedChat('middle',2)];
+    const h=await opened();expect(h.result.current.activeConversationId).toBe('latest');
+    expect(h.result.current.state.conversations).toHaveLength(3);expect(f.gatewayConnect).not.toHaveBeenCalled();
+  });
+  it('opens the existing profile chat and only /new creates another session',async()=>{
+    f.state!.conversations=[savedChat('existing',1)];const h=await opened();
+    act(()=>{h.result.current.openConversation('hermes-1');});
+    expect(h.result.current.state.conversations).toHaveLength(1);
+    await act(async()=>{await h.result.current.runCommand('existing','/new Fresh');});
+    expect(h.result.current.state.conversations).toHaveLength(2);
+    expect(h.result.current.state.activeConversationId).toBe(h.result.current.activeConversationId);
+    expect(h.result.current.state.conversations.find(c=>c.id==='existing')?.draft).toBe('saved draft');
+  });
+});
+
 describe('SSH and chat isolation',()=>{
+  it('routes a slash command to a separate result without calling the chat API',async()=>{
+    const h=await opened();let id='';
+    act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'/help');});
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    const c=h.result.current.state.conversations[0];
+    expect(c.messages).toEqual([]);
+    expect(c.commandResults?.at(-1)).toMatchObject({command:'/help',status:'complete'});
+    expect(c.commandResults?.at(-1)?.content).toContain('/new');
+    expect(f.stream).not.toHaveBeenCalled();
+  });
+  it('starts a fresh conversation with /new while keeping previous history',async()=>{
+    const h=await opened();let id='';
+    act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'/new Investigasi');});
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(h.result.current.state.conversations).toHaveLength(2);
+    expect(h.result.current.activeConversationId).not.toBe(id);
+    expect(h.result.current.state.conversations[0].title).toBe('Investigasi');
+    expect(h.result.current.state.conversations[0].gatewaySessionId).toBeUndefined();
+    expect(f.stream).not.toHaveBeenCalled();
+  });
+  it('rejects unsupported controls without sending them as prompts',async()=>{
+    const h=await opened();let id='';
+    act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'/model other');});
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(h.result.current.state.conversations[0].messages).toEqual([]);
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)).toMatchObject({status:'error'});
+    expect(f.stream).not.toHaveBeenCalled();
+  });
+  it('sends an escaped slash as literal chat text',async()=>{
+    const h=await opened();let id='';
+    act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'//path/example');});
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(f.stream.mock.calls[0][0].messages).toEqual([{role:'user',content:'/path/example'}]);
+  });
   it('never authenticates a new host before explicit fingerprint trust',async()=>{
     const h=await opened();
     await act(async()=>{await h.result.current.connectVps('vps-1');});
@@ -125,9 +346,11 @@ describe('desktop close durability',()=>{
     act(()=>{closing=f.closeHandler!();});
     const saved=f.write.mock.calls.at(-1)![0] as SavedState;
     expect(saved.conversations[0].messages.at(-1)).toMatchObject({status:'unknown',content:'partial'});
+    expect(saved.conversations[0].executionLog?.map(entry=>entry.kind)).toEqual(['request','response','unknown']);
     expect(f.destroyWindow).not.toHaveBeenCalled();
     act(()=>{onEvent({type:'delta',text:' discarded'});onEvent({type:'done',finishReason:'stop'});h.result.current.setDraft(id,'blocked');});
     expect(h.result.current.state.conversations[0].messages.at(-1)).toMatchObject({status:'unknown',content:'partial'});
+    expect(h.result.current.state.conversations[0].executionLog?.map(entry=>entry.kind)).toEqual(['request','response','unknown']);
     expect(h.result.current.state.conversations[0].draft).toBe('');
     const saves=f.write.mock.calls.length;
     await act(async()=>{saving.resolve();await closing;stream.resolve();await sending;});
@@ -142,6 +365,19 @@ describe('desktop close durability',()=>{
     expect(h.result.current.busy).toBe(false);expect(h.result.current.saveError).toBeTruthy();
     act(()=>h.result.current.setDraft(id,'saved after recovery'));
     expect(h.result.current.state.conversations[0].draft).toBe('saved after recovery');
+  });
+
+  it('does not revive an interrupted request from callbacks after a failed close has settled',async()=>{
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Start work');});
+    const stream=deferred();let onEvent!:(event:HermesEvent)=>void;
+    f.stream.mockImplementation((_request:HermesRequest,handler:(event:HermesEvent)=>void)=>{onEvent=handler;return stream.promise;});
+    let sending!:Promise<void>;await act(async()=>{sending=h.result.current.sendMessage(id);});
+    f.destroyWindow.mockRejectedValueOnce(new Error('window still open'));
+    await act(async()=>{await f.closeHandler!();stream.resolve();await sending;});
+    act(()=>{onEvent({type:'delta',text:'late response'});onEvent({type:'done',finishReason:'stop'});});
+    const conversation=h.result.current.state.conversations[0];
+    expect(conversation.messages.at(-1)).toMatchObject({status:'unknown',content:''});
+    expect(conversation.executionLog?.map(entry=>entry.kind)).toEqual(['request','unknown']);
   });
 
   it('does not dispatch a chat whose initial save finishes after close starts',async()=>{
@@ -202,6 +438,68 @@ describe('update installation durability',()=>{
 });
 
 describe('chat request durability and routing',()=>{
+  it('persists truthful execution history after completion without logging credentials or message bodies',async()=>{
+    const h=await opened();let id='';let other='';
+    act(()=>{id=h.result.current.createConversation('hermes-1');other=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'private user request');});
+    f.stream.mockImplementation(async(request:HermesRequest,onEvent:(e:HermesEvent)=>void)=>{
+      const saved=f.write.mock.calls.at(-1)![0] as SavedState;
+      expect(saved.conversations.find(c=>c.id===id)!.executionLog?.[0]).toMatchObject({requestId:request.requestId,kind:'request'});
+      onEvent({type:'tool',text:'Running shell: pwd'});
+      onEvent({type:'delta',text:'private assistant response'});
+      onEvent({type:'delta',text:' continued'});
+      onEvent({type:'done',finishReason:'stop'});
+      onEvent({type:'done',finishReason:'stop'});
+      onEvent({type:'error',message:'late duplicate terminal',uncertain:true});
+    });
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    const conversation=h.result.current.state.conversations.find(c=>c.id===id)!;
+    const log=conversation.executionLog??[];
+    expect(log.map(entry=>entry.kind)).toEqual(['request','tool','response','complete']);
+    expect(log[1].text).toBe('Running shell: pwd');
+    expect(new Set(log.map(entry=>entry.id)).size).toBe(4);
+    expect(new Set(log.map(entry=>entry.requestId)).size).toBe(1);
+    expect(log.every(entry=>Number.isFinite(entry.timestamp))).toBe(true);
+    expect(JSON.stringify(log)).not.toMatch(/private user request|private assistant response|token|late duplicate/);
+    expect(conversation.messages.at(-1)?.status).toBe('complete');
+    expect(h.result.current.state.conversations.find(c=>c.id===other)?.executionLog??[]).toEqual([]);
+    expect(h.result.current.activeConversationId).toBe(other);
+    expect((f.write.mock.calls.at(-1)![0] as SavedState).conversations.find(c=>c.id===id)?.executionLog).toEqual(log);
+    expect(h.result.current.streamingIds.size).toBe(0);
+  });
+  it.each(['disconnect','uncertain','error'] as const)('never reports tool success after %s',async(outcome)=>{
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Start work');});
+    f.stream.mockImplementation(async(_request:HermesRequest,onEvent:(e:HermesEvent)=>void)=>{
+      onEvent({type:'tool',text:'Starting deployment'});
+      if(outcome!=='disconnect')onEvent({type:'error',message:'Backend stopped',uncertain:outcome==='uncertain'});
+    });
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    const log=h.result.current.state.conversations[0].executionLog??[];
+    expect(log.map(entry=>entry.kind)).toEqual(['request','tool',outcome==='error'?'error':'unknown']);
+    expect(log[1].text).toBe('Starting deployment');
+    expect(JSON.stringify(log)).not.toMatch(/success|succeeded|berhasil/i);
+  });
+  it('bounds a noisy tool stream while retaining the terminal outcome',async()=>{
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Start work');});
+    f.stream.mockImplementation(async(_request:HermesRequest,onEvent:(e:HermesEvent)=>void)=>{
+      for(let index=0;index<205;index++)onEvent({type:'tool',text:`${index}: ${'x'.repeat(5000)}`});
+      onEvent({type:'done',finishReason:'stop'});
+    });
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    const log=h.result.current.state.conversations[0].executionLog??[];
+    expect(log).toHaveLength(200);
+    expect(log[0].text.startsWith('6: ')).toBe(true);
+    expect(log.filter(entry=>entry.kind==='tool').every(entry=>entry.text.length===4000)).toBe(true);
+    expect(log.at(-1)?.kind).toBe('complete');
+  });
+  it('records pre-dispatch save failure as an error and clears logs from memory on lock',async()=>{
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Start work');});
+    f.write.mockRejectedValueOnce(new Error('disk full'));
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(h.result.current.state.conversations[0].executionLog?.map(entry=>entry.kind)).toEqual(['request','error']);
+    expect(f.stream).not.toHaveBeenCalled();
+    await act(async()=>{await h.result.current.lock();});
+    expect(h.result.current.state.conversations).toEqual([]);
+  });
   it('persists request identity before dispatch and streams only to its conversation',async()=>{
     const h=await opened();let id='';let other='';
     act(()=>{id=h.result.current.createConversation('hermes-1');other=h.result.current.createConversation('hermes-1');});
@@ -217,6 +515,31 @@ describe('chat request durability and routing',()=>{
     expect(h.result.current.activeConversationId).toBe(other);
     expect(h.result.current.state.conversations.find(c=>c.id===other)!.messages).toHaveLength(0);
     expect(h.result.current.state.conversations.find(c=>c.id===id)!.messages.at(-1)).toMatchObject({content:'Halo juga',status:'complete'});
+  });
+  it('localizes controls without adding language instructions to Agent messages',async()=>{
+    setLanguage('en');
+    const h=await opened();let id='';
+    act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Tolong jawab dalam bahasa Indonesia.');});
+    expect(h.result.current.state.conversations[0].title).toBe('New conversation');
+    await act(async()=>{await h.result.current.runCommand(id,'/help');});
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.content).toContain('Start a new conversation.');
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    const request=f.stream.mock.calls[0][0] as HermesRequest;
+    expect(request.messages).toEqual([{role:'user',content:'Tolong jawab dalam bahasa Indonesia.'}]);
+    expect(h.result.current.state.conversations[0].messages.at(-1)?.content).toBe('Jawaban');
+    act(()=>setLanguage('id'));
+    expect(h.result.current.state.conversations[0].messages.at(-1)?.content).toBe('Jawaban');
+    await act(async()=>{await h.result.current.runCommand(id,'/help');});
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.content).toContain('Mulai percakapan baru.');
+  });
+  it('records the configured HTTP profile label without using it as model or mutating old replies',async()=>{
+    f.state!.hermes[0].agentProfile='Leveret';
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Hello');});
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    act(()=>{h.result.current.saveHermes({...h.result.current.state.hermes[0],agentProfile:'Research'});h.result.current.setDraft(id,'Again');});
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(f.stream.mock.calls.map(call=>(call[0] as HermesRequest).model)).toEqual(['hermes-agent','hermes-agent']);
+    expect(h.result.current.state.conversations[0].messages.filter(m=>m.role==='assistant').map(m=>m.agentProfile)).toEqual(['Leveret','Research']);
   });
   it('does not dispatch when request identity cannot be saved',async()=>{
     const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});act(()=>h.result.current.setDraft(id,'Halo'));

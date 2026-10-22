@@ -9,7 +9,7 @@ Dokumen ini memandu langkah-langkah menghubungkan aplikasi **Warren** ke profil 
 * **Domain Endpoint (HTTPS):** `https://leveret.unlessrabbit.my.id/v1`
 * **Port Lokal:** `8642` (di-forward oleh Cloudflare Tunnel)
 * **Model Name:** `leveret`
-* **API Token (`API_SERVER_KEY`):** `6f421c87eac3cbe4e987e1db24e2139e`
+* **API Token (`API_SERVER_KEY`):** `<API_SERVER_KEY_ANDA>`
 
 ---
 
@@ -39,7 +39,7 @@ Konfigurasi `.env` untuk API server sudah disiapkan di VPS (`/root/.hermes/profi
 5. Isi formulir dengan data berikut:
    * **Nama koneksi:** `Leveret`
    * **URL server:** `https://leveret.unlessrabbit.my.id/v1`
-   * **API token:** `6f421c87eac3cbe4e987e1db24e2139e`
+   * **API token:** `<API_SERVER_KEY_ANDA>`
    * **Model:** `leveret`
 6. Klik **Simpan Agent**.
 7. Pada kartu koneksi Leveret yang baru muncul, klik tombol **Tes endpoint**. Indikator akan menunjukkan koneksi berhasil.

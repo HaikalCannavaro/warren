@@ -3,6 +3,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppUpdater } from './useAppUpdater';
 import type { InstallResult, UpdateProgress } from '../lib/updates';
+import { setLanguage } from '../lib/i18n';
 
 const native = vi.hoisted(() => ({ getUpdateInfo: vi.fn(), checkForUpdate: vi.fn(), downloadUpdate: vi.fn(), installUpdate: vi.fn() }));
 vi.mock('../lib/updates', () => native);
@@ -13,6 +14,7 @@ async function setup() { const hook = renderHook(() => useAppUpdater({ preview: 
 async function prepared() { const hook = await setup(); await act(() => hook.result.current.check()); await act(() => hook.result.current.download()); return hook; }
 
 beforeEach(() => {
+  setLanguage('id');
   vi.clearAllMocks();
   native.getUpdateInfo.mockResolvedValue({ platform: 'android', configured: true, currentVersion: '0.2.0', message: '' });
   native.checkForUpdate.mockResolvedValue(release);

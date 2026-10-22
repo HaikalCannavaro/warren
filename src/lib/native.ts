@@ -1,3 +1,4 @@
+import { translate } from './i18n';
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { HermesCapabilities, HermesEvent, HermesRequest, SshEvent, SshRequest } from '../types';
@@ -14,7 +15,7 @@ export async function destroyWindow():Promise<void> {
   requireNative(); await getCurrentWindow().destroy();
 }
 function requireNative() {
-  if (!nativeAvailable()) throw new Error('Koneksi asli tersedia di aplikasi Tauri. Browser ini hanya pratinjau tampilan.');
+  if (!nativeAvailable()) throw new Error(translate("Use Warren on Windows or Android to connect to your servers.", "Koneksi asli tersedia di aplikasi Tauri. Browser ini hanya pratinjau tampilan."));
 }
 export async function probeSsh(host:string,port:number):Promise<string> {
   requireNative(); return invoke('ssh_probe',{host,port});
@@ -38,4 +39,16 @@ export async function probeHermes(url:string,token:string):Promise<HermesCapabil
 export async function streamHermes(request:HermesRequest,handler:(event:HermesEvent)=>void):Promise<void> {
   requireNative(); const onEvent=new Channel<HermesEvent>(); onEvent.onmessage=handler;
   return invoke('chat_stream',{request,onEvent});
+}
+
+export type GatewayTransportEvent = { type: 'message'; text: string } | { type: 'closed'; message: string };
+export async function connectGateway(connectionId:string,url:string,token:string,handler:(event:GatewayTransportEvent)=>void):Promise<void> {
+  requireNative(); const onEvent=new Channel<GatewayTransportEvent>(); onEvent.onmessage=handler;
+  return invoke('gateway_connect',{connectionId,url,token,onEvent});
+}
+export async function sendGateway(connectionId:string,text:string):Promise<void> {
+  requireNative(); return invoke('gateway_send',{connectionId,text});
+}
+export async function disconnectGateway(connectionId:string):Promise<void> {
+  requireNative(); return invoke('gateway_disconnect',{connectionId});
 }

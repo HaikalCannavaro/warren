@@ -1,0 +1,31 @@
+.composer-area { position: relative; }
+.slash-menu { position: absolute; z-index: 4; bottom: calc(100% - 2px); left: 18px; right: 18px; max-width: 920px; margin: 0 auto 8px; border: 1px solid #365269; border-radius: 10px; background: #142333; overflow: hidden; box-shadow: 0 6px 22px #0004; animation: slash-appear 140ms ease-out; }
+@keyframes slash-appear { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .slash-menu { animation: none; } }
+.slash-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #2b4053; color: #c1d8e2; font-size: 11px; }
+.slash-menu-heading > span { color: #819bad; font-size: 9px; }
+.slash-menu-list { max-height: min(230px, 28dvh); overflow-y: auto; overscroll-behavior: contain; }
+.slash-menu-list > button { display: flex; flex-direction: column; width: 100%; min-height: 48px; padding: 10px 12px; gap: 5px; text-align: left; background: transparent; border-bottom: 1px solid #243a4c; color: #c4dbe5; cursor: pointer; }
+.slash-menu-list > button:last-child { border-bottom: 0; }
+.slash-menu-list > button[aria-selected="true"], .slash-menu-list > button:not(:disabled):hover { background: #21413f; }
+.slash-menu-list > button:disabled { cursor: default; opacity: .65; }
+.slash-menu-command { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; font-size: 12px; }
+.slash-menu-command > strong { color: #9ce6ce; font-family: Consolas, monospace; }
+.slash-menu-command > span { color: #9db3c2; font-size: 10px; }
+.slash-menu-description, .slash-menu-reason { font-size: 10px; line-height: 1.5; }
+.slash-menu-reason { color: #e2c38d; }
+.slash-menu-state, .slash-menu-error { margin: 0; padding: 10px 12px; font-size: 11px; color: #a6bbca; line-height: 1.6; }
+.slash-menu-error { display: flex; justify-content: space-between; gap: 12px; color: #edb2bb; }
+.slash-menu-error > p { margin: 0; overflow-wrap: anywhere; }
+.slash-menu-error > button { flex-shrink: 0; min-height: 36px; color: #aae6d4; padding: 5px 10px; background: #23443e; border: 1px solid #42675a; border-radius: 5px; }
+.command-result { max-width: min(96%,820px); margin: 0 auto 18px; padding: 11px 14px; border: 1px solid #344858; border-left: 3px solid #699b9d; border-radius: 7px; background: #15232e; }
+.command-result-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 7px; font-size: 10px; color: #8eabbc; }
+.command-result-header strong { color: #b4e1d5; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+.command-result-header time { margin-left: auto; font-size: 9px; color: #8196a5; }
+.command-result-content { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.7; color: #b7cbd5; }
+.command-result-error, .command-result-unknown { border-left-color: #d5a16e; }
+.command-result-state { margin: 7px 0 0; font-size: 10px; color: #a9bccc; }
+.command-result-error .command-result-state { color: #edb2bb; }
+.command-result-unknown .command-result-state { color: #e2c38d; }
+.profile-form .transport-select { width: 100%; margin-top: 8px; padding: 11px 12px; border: 1px solid #344b60; border-radius: 6px; background: #101e2d; color: #c7dae6; font: inherit; }
+@media (max-width: 700px) { .slash-menu-heading > span { display: none; } .slash-menu-command { font-size: 13px; } .slash-menu-list > button { min-height: 52px; } .slash-menu-description, .slash-menu-reason { font-size: 11px; } .profile-form .transport-select { font-size: 16px; } .command-result { max-width: 100%; } }

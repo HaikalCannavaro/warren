@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TerminalWorkspace } from './TerminalWorkspace';
+import { setLanguage } from '../lib/i18n';
 
 const terminals = vi.hoisted(() => [] as { write: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }[]);
 vi.mock('@xterm/xterm', () => ({ Terminal: class {
@@ -17,6 +18,7 @@ vi.mock('@xterm/xterm', () => ({ Terminal: class {
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() {} } }));
 
 beforeEach(() => {
+  setLanguage('id');
   terminals.length = 0;
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
 });
@@ -45,6 +47,23 @@ function pasteIntoTerminal(text: string) {
 }
 
 describe('terminal paste safety and lifetime', () => {
+  it('switches terminal controls and paste review without recreating the terminal or changing its text', () => {
+    setLanguage('en');
+    const { writeTerminal, callbacks, unsubscribe } = setup();
+    expect(screen.getByText('Connected')).toBeTruthy();
+    const bytes = new Uint8Array([104, 105]);
+    callbacks[0](bytes);
+    pasteIntoTerminal('echo Halo');
+    expect(screen.getByRole('dialog', { name: 'Review before pasting' })).toBeTruthy();
+    act(() => setLanguage('id'));
+    expect(screen.getByRole('dialog', { name: 'Tinjau sebelum paste' })).toBeTruthy();
+    expect(terminals).toHaveLength(1);
+    expect(terminals[0].write).toHaveBeenCalledWith(bytes);
+    expect(terminals[0].dispose).not.toHaveBeenCalled();
+    expect(unsubscribe).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Tempel ke terminal' }));
+    expect(writeTerminal).toHaveBeenCalledExactlyOnceWith('session-1', 'echo Halo');
+  });
   it('intercepts even a single-line paste before xterm receives bytes', () => {
     const { writeTerminal } = setup();
     const event = pasteIntoTerminal('echo hello');
