@@ -2,7 +2,7 @@
   "bundle": {
     "createUpdaterArtifacts": true,
     "android": {
-      "versionCode": 2000
+      "versionCode": 2001
     }
   },
   "plugins": {

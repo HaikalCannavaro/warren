@@ -1,6 +1,6 @@
 [package]
 name = "harbor"
-version = "0.2.0"
+version = "0.2.1"
 description = "Warren — SSH terminal and Hermes workspace"
 authors = ["Warren contributors"]
 edition = "2021"
