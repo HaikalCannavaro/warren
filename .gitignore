@@ -9,7 +9,6 @@ salt.txt
 .env.*
 !.env.example
 vault-salt.bin
-src-tauri/tauri.release.conf.json
 release/
 *.jks
 *.keystore

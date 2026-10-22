@@ -1,0 +1,90 @@
+name: Release Warren
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: Build & Publish Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Run Test Suites
+        run: |
+          npm test
+          npm run test:release
+
+      - name: Build Windows Desktop Release (.exe & .sig)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          npm run desktop:release
+
+      - name: Package Release with Warren Tooling
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          $installer = (Get-ChildItem -Path "src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1).FullName
+          Write-Host "Found installer: $installer"
+          node scripts/release.mjs package --repository HaikalCannavaro/warren --windows "$installer" --notes docs/UPDATES.md
+
+      - name: Publish Official GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $pkg = Get-Content package.json | ConvertFrom-Json
+          $ver = $pkg.version
+          $tag = "v$ver"
+          $releaseDir = "release/$tag"
+
+          Write-Host "Publishing release for $tag from $releaseDir..."
+          Get-ChildItem -Path $releaseDir
+
+          # Delete existing release/tag if already created to allow clean overwrite
+          gh release delete $tag --yes --repo HaikalCannavaro/warren 2>$null || $true
+
+          gh release create $tag `
+            "$releaseDir/Warren-$ver-windows-x64-setup.exe" `
+            "$releaseDir/Warren-$ver-windows-x64-setup.exe.sig" `
+            "$releaseDir/latest.json" `
+            --repo HaikalCannavaro/warren `
+            --title "Warren v$ver" `
+            --notes-file "$releaseDir/notes.md"
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warren-windows-x64-release
+          path: |
+            release/*/*
+            src-tauri/target/release/bundle/nsis/*
+          if-no-files-found: ignore

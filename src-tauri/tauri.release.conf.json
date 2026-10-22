@@ -1,0 +1,25 @@
+{
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "android": {
+      "versionCode": 2000
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyQTFBMDQyMzFFQ0VGMDgKUldRSTcrd3hRcUNoTW1kTUM0VVp4dkxEeFd4V1JxN0JCdTdoNnNXaEpjalk1cTdqWWEzak5WOUMK",
+      "endpoints": [
+        "https://github.com/HaikalCannavaro/warren/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true,
+      "allowDowngrades": false,
+      "windows": {
+        "installMode": "passive"
+      }
+    },
+    "harbor-android-updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyQTFBMDQyMzFFQ0VGMDgKUldRSTcrd3hRcUNoTW1kTUM0VVp4dkxEeFd4V1JxN0JCdTdoNnNXaEpjalk1cTdqWWEzak5WOUMK",
+      "endpoint": "https://github.com/HaikalCannavaro/warren/releases/latest/download/android.json"
+    }
+  }
+}
