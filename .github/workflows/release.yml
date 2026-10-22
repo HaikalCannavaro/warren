@@ -113,6 +113,8 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
       - name: Install Android and native build tools
         run: |
           sudo apt-get update
