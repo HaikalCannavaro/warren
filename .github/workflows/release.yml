@@ -54,7 +54,7 @@ jobs:
         run: |
           $installer = (Get-ChildItem -Path "src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1).FullName
           Write-Host "Found installer: $installer"
-          node scripts/release.mjs package --repository HaikalCannavaro/warren --windows "$installer" --notes docs/UPDATES.md
+          node scripts/release.mjs package --repository HaikalCannavaro/warren --windows "$installer" --notes RELEASE_NOTES.md
 
       - name: Publish Official GitHub Release
         env:
