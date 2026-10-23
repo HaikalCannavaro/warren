@@ -938,4 +938,108 @@ describe('Extended slash commands suite', () => {
     });
     expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
   });
+
+  it('rejects unexpected arguments for /retry', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+      h.result.current.setDraft(id, 'First message');
+    });
+    await act(async () => {
+      await h.result.current.sendMessage(id);
+    });
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/retry now');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.content).toContain('Gunakan /retry tanpa argumen');
+  });
+
+  it('/fork without arguments uses default (Fork) suffix', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+      h.result.current.setDraft(id, 'Turn 1');
+    });
+    await act(async () => {
+      await h.result.current.sendMessage(id);
+    });
+
+    const beforeCount = h.result.current.state.conversations.length;
+    await act(async () => {
+      await h.result.current.runCommand(id, '/fork');
+    });
+
+    expect(h.result.current.state.conversations.length).toBe(beforeCount + 1);
+    const active = h.result.current.state.conversations.find(c => c.id === h.result.current.activeConversationId);
+    expect(active?.title).toContain('Turn 1 (');
+  });
+
+  it('/model rejects unknown or unavailable model', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    f.hermesHttp.mockResolvedValueOnce(JSON.stringify({
+      data: [{ id: 'hermes-3-70b' }],
+    }));
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/model non-existent-model');
+    });
+
+    const result = h.result.current.state.conversations[0].commandResults?.at(-1);
+    expect(result?.status).toBe('error');
+    expect(result?.content).toContain('non-existent-model');
+  });
+
+  it('/models reports error when server is offline', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    f.hermesHttp.mockRejectedValue(new Error('Network unreachable'));
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/models');
+    });
+
+    const result = h.result.current.state.conversations[0].commandResults?.at(-1);
+    expect(result?.status).toBe('error');
+    expect(result?.content).toContain('Network unreachable');
+  });
+
+  it('/lastcmd with non-numeric argument falls back safely to default lines', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    f.state!.vps[0].fingerprint = 'SHA256:verified';
+    await act(async () => {
+      await h.result.current.connectVps('vps-1');
+    });
+    const sessionId = h.result.current.activeSessionId!;
+
+    const mockTerm = {
+      _testBuffer: ['line 1', 'line 2', 'line 3'],
+    } as any;
+    registerTerminal(sessionId, mockTerm);
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/lastcmd not-a-number');
+    });
+
+    const conv = h.result.current.state.conversations[0];
+    expect(conv.commandResults?.at(-1)?.status).toBe('complete');
+    expect(conv.draft).toContain('```terminal\nline 1\nline 2\nline 3\n```');
+  });
 });
