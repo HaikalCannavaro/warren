@@ -1,13 +1,14 @@
-# Warren v0.2.2
+# Warren v0.2.3
 
-Rilis resmi Warren v0.2.2 — Personal Workspace untuk SSH Terminal & Hermes Agent Companion.
+Rilis resmi Warren v0.2.3 — Personal Workspace untuk SSH Terminal & Hermes Agent Companion.
 
-### Pembaruan & Fitur Baru (v0.2.2):
-- **Extended Slash Commands Suite**: Dukungan penuh slash command pada koneksi HTTP REST (`transport: 'openai'`) dengan pengelompokan 4 kategori antarmuka:
-  - **Workspace Bridge**: `/lastcmd [lines]` (dan alias `/term`) untuk menangkap N baris output terakhir dari buffer terminal SSH aktif dan langsung menyuntikkannya ke composer Agent sebagai blok konteks terformat.
-  - **Session Control**: `/clear` (membersihkan visual pesan layar tanpa mereset memori sesi server), `/retry` (mengirim ulang pesan terakhir), `/fork [name]` (mencabangkan percakapan aktif ke tab sesi baru untuk eksperimen aman), `/export [md|json]` (mengunduh atau menyalin transkrip chat), dan `/stop` (menghentikan streaming seketika melalui abort controller lokal dan stop request).
-  - **Hermes REST Intelligence**: `/models` & `/model [id]` (melihat dan mengganti model AI via `GET /v1/models`), `/skills` (melihat skill agent yang aktif via `GET /v1/skills`), dan `/tools` (melihat toolset yang tersedia via `GET /v1/toolsets`).
-  - **System & Telemetry**: `/status` (mengukur latensi round-trip ms, status kesehatan server, dan fitur aktif via `GET /health` dan `GET /v1/capabilities`), `/help` (panduan perintah berkategori), dan `/usage` (status pemakaian sesi).
-- **Adaptive Slash Menu UX**: Desain menu slash command responsif dengan pembagian kategori visual, navigasi keyboard (`↑/↓`, `Tab`, `Enter`, `Esc`), serta mode compact horizontal-scroll pada layar sempit/mobile agar tidak terhalang keyboard virtual.
-- **Native HTTP Bridge Hardening**: Modul Rust `hermes_http` di backend Tauri v2 untuk eksekusi request REST berotentikasi ke API Server Hermes.
-- **In-App Auto-Updater Compatibility**: Pembaruan otomatis dapat langsung diunduh dan dipasang dari menu Pengaturan Warren pada versi Windows dan Android.
+### Pembaruan & Fitur Baru (v0.2.3):
+- **Biometric / Fingerprint Workspace Unlock (Android)**:
+  - Dukungan buka kunci brankas cepat menggunakan sensor sidik jari / biometrik perangkat (`androidx.biometric.BiometricPrompt`) yang diamankan dengan enkripsi AES-256-GCM berbasis hardware **Android Keystore (`AndroidKeyStore`)**.
+  - Opsi pendaftaran otomatis (*Enable fingerprint unlock on this device*) saat membuka brankas pertama kali dengan master password, tombol akses cepat **Buka dengan sidik jari** di layar masuk, serta pengaturan manajemen biometrik di menu **Settings**.
+- **Android System Bar & Cutout Safe-Area Fix**:
+  - Integrasi `WindowInsetsCompat` (`systemBars()`, `displayCutout()`, dan `ime()`) langsung pada root view native Android serta fallback CSS `env(safe-area-inset-top)` / `env(safe-area-inset-bottom)` agar bagian atas aplikasi (`.topbar` & `.vault-screen`) tidak lagi tertimpa oleh status bar sistem.
+- **Mobile SSH Terminal Viewport & Clipping Fix**:
+  - Perbaikan kalkulasi dimensi `FitAddon` dengan memisahkan padding ke wrapper `.xterm-shell` dan mengenolkan padding `.xterm-container`, ditambah pemangkasan batas baris/kolom (*row/col clamping*) dan listener `window.visualViewport` saat keyboard virtual muncul agar baris prompt paling bawah dan sisi kanan terminal tidak lagi terpotong.
+  - Tata letak halaman terminal mobile yang lebih ringkas dan responsif untuk memaksimalkan ruang vertikal sesi SSH.
+- **Extended Slash Commands Suite**: Tetap menyertakan seluruh 13 perintah slash HTTP & lokal (`/lastcmd`, `/term`, `/clear`, `/retry`, `/fork`, `/export`, `/models`, `/model`, `/skills`, `/tools`, `/status`, `/stop`, `/help`).
