@@ -14,7 +14,17 @@ const descriptions: Record<string, readonly [string, string]> = {
   model: ['View or change the session model.', 'Lihat atau ubah model sesi.'],
   compact: ['Compact the conversation context.', 'Ringkas konteks percakapan.'],
   stop: ['Ask the Agent to stop its active task.', 'Minta Agent menghentikan pekerjaan aktif.'],
+  lastcmd: ['Capture recent lines from the active terminal buffer.', 'Salin baris terbaru dari buffer terminal aktif.'],
+  term: ['Alias for /lastcmd. Capture active terminal lines.', 'Alias untuk /lastcmd. Salin baris terminal aktif.'],
+  clear: ['Clear conversation messages from view.', 'Bersihkan pesan percakapan dari tampilan.'],
+  retry: ['Re-send the last user message in this conversation.', 'Kirim ulang pesan pengguna terakhir dalam percakapan ini.'],
+  fork: ['Fork current conversation to a new tab.', 'Cabangkan percakapan saat ini ke tab baru.'],
+  export: ['Export conversation transcript as Markdown or JSON.', 'Ekspor riwayat percakapan sebagai Markdown atau JSON.'],
+  models: ['Query and list available Hermes models.', 'Lihat daftar model Hermes yang tersedia.'],
+  skills: ['Query and list loaded agent skills.', 'Lihat daftar skill agent yang dimuat.'],
+  tools: ['Query and list available Hermes toolsets.', 'Lihat daftar toolset Hermes yang tersedia.'],
 };
+
 const gatewayReason = ['Requires a compatible Hermes Gateway.', 'Memerlukan Gateway Hermes yang kompatibel.'] as const;
 const unadvertisedReason = ['This Gateway does not advertise this command.', 'Perintah belum diiklankan oleh Gateway ini.'] as const;
 
@@ -39,6 +49,135 @@ export function basicSlashCommands(): SlashCommand[] {
     { name: 'model', description: translate(...descriptions.model), args: 'MODEL [--provider PROVIDER]', available: false, reason },
     { name: 'compact', description: translate(...descriptions.compact), args: '[focus]', available: false, reason },
     { name: 'stop', description: translate(...descriptions.stop), available: false, reason, allowWhileRunning: true },
+  ];
+}
+
+/**
+ * Extended slash commands suite with category sectioning, workspace bridge,
+ * session lifecycle, and Hermes REST intelligence.
+ */
+export function extendedSlashCommands(transport: 'openai' | 'gateway' = 'openai'): SlashCommand[] {
+  const gwReason = translate(...gatewayReason);
+  const isGateway = transport === 'gateway';
+
+  return [
+    // WORKSPACE BRIDGE
+    {
+      name: 'lastcmd',
+      description: translate(...descriptions.lastcmd),
+      args: '[lines]',
+      available: true,
+      category: 'workspace',
+      aliases: ['term'],
+    },
+    {
+      name: 'term',
+      description: translate(...descriptions.term),
+      args: '[lines]',
+      available: true,
+      category: 'workspace',
+    },
+
+    // SESSION CONTROL
+    {
+      name: 'new',
+      description: translate(...descriptions.new),
+      args: '[name]',
+      available: true,
+      category: 'session',
+    },
+    {
+      name: 'fork',
+      description: translate(...descriptions.fork),
+      args: '[name]',
+      available: true,
+      category: 'session',
+    },
+    {
+      name: 'clear',
+      description: translate(...descriptions.clear),
+      available: true,
+      category: 'session',
+    },
+    {
+      name: 'retry',
+      description: translate(...descriptions.retry),
+      available: true,
+      category: 'session',
+    },
+    {
+      name: 'export',
+      description: translate(...descriptions.export),
+      args: '[format]',
+      available: true,
+      category: 'session',
+    },
+    {
+      name: 'stop',
+      description: translate(...descriptions.stop),
+      available: true,
+      allowWhileRunning: true,
+      category: 'session',
+    },
+    {
+      name: 'compact',
+      description: translate(...descriptions.compact),
+      args: '[focus]',
+      available: isGateway,
+      reason: isGateway ? undefined : gwReason,
+      category: 'session',
+    },
+
+    // HERMES INTEL
+    {
+      name: 'models',
+      description: translate(...descriptions.models),
+      available: true,
+      category: 'intel',
+    },
+    {
+      name: 'model',
+      description: translate(...descriptions.model),
+      args: isGateway ? 'MODEL [--provider PROVIDER]' : '[model-id]',
+      available: true,
+      category: 'intel',
+    },
+    {
+      name: 'skills',
+      description: translate(...descriptions.skills),
+      available: true,
+      category: 'intel',
+    },
+    {
+      name: 'tools',
+      description: translate(...descriptions.tools),
+      available: true,
+      category: 'intel',
+    },
+
+    // SYSTEM
+    {
+      name: 'status',
+      description: translate(...descriptions.status),
+      available: true,
+      allowWhileRunning: true,
+      category: 'system',
+    },
+    {
+      name: 'help',
+      description: translate(...descriptions.help),
+      available: true,
+      allowWhileRunning: true,
+      category: 'system',
+    },
+    {
+      name: 'usage',
+      description: translate(...descriptions.usage),
+      available: isGateway,
+      reason: isGateway ? undefined : gwReason,
+      allowWhileRunning: true,
+      category: 'system',
+    },
   ];
 }
 

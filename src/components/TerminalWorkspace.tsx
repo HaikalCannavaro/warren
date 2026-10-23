@@ -5,6 +5,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ClipboardPaste, Command, Cor
 import '@xterm/xterm/css/xterm.css';
 import type { Settings, TerminalSession, VpsProfile } from '../types';
 import { sanitizePaste } from '../lib/domain';
+import { registerTerminal } from '../lib/terminalBridge';
 import { Dialog } from './Dialog';
 import { useI18n } from '../lib/i18n';
 
@@ -58,6 +59,7 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
     term.open(element);
     terminal.current = term;
     fit.current = fitAddon;
+    const unregisterTerminal = registerTerminal(session.id, term);
     const incoming = latest.current.subscribeTerminal(session.id, (bytes) => term.write(bytes));
     const outgoing = term.onData((data) => { if (latest.current.status === 'connected') void latest.current.writeTerminal(session.id, data).catch((cause) => setError(String(cause))); });
     const resize = term.onResize(({ cols, rows }) => { if (latest.current.status === 'connected') void latest.current.resizeTerminal(session.id, cols, rows).catch((cause) => setError(String(cause))); });
@@ -65,7 +67,7 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
     resizeObserver.observe(element);
     const interceptPaste = (event: ClipboardEvent) => { event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); const value = event.clipboardData?.getData('text/plain'); if (value) setPaste(value); };
     element.addEventListener('paste', interceptPaste, true);
-    return () => { incoming(); outgoing.dispose(); resize.dispose(); resizeObserver.disconnect(); element.removeEventListener('paste', interceptPaste, true); term.dispose(); terminal.current = null; fit.current = null; };
+    return () => { unregisterTerminal(); incoming(); outgoing.dispose(); resize.dispose(); resizeObserver.disconnect(); element.removeEventListener('paste', interceptPaste, true); term.dispose(); terminal.current = null; fit.current = null; };
     // A terminal lives for its session, including while hidden. Callback refs avoid resetting its buffer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id]);

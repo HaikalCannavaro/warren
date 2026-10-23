@@ -3,12 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspace } from './useWorkspace';
 import { emptyState } from '../lib/domain';
 import { basicSlashCommands } from '../lib/slashCommands';
+import { clearTerminalRegistry, registerTerminal } from '../lib/terminalBridge';
 import { setLanguage } from '../lib/i18n';
 import type { HermesEvent, HermesRequest, SavedState, SshEvent, SshRequest, VpsProfile } from '../types';
 
 const f=vi.hoisted(()=>({
   state:undefined as SavedState|undefined,
   write:vi.fn(),close:vi.fn(),open:vi.fn(),probe:vi.fn(),connect:vi.fn(),disconnect:vi.fn(),stream:vi.fn(),
+  hermesHttp:vi.fn(),
   writeSsh:vi.fn(),resizeSsh:vi.fn(),onDesktopClose:vi.fn(),destroyWindow:vi.fn(),unlisten:vi.fn(),
   closeHandler:undefined as (()=>Promise<void>)|undefined,
   gatewayConnect:vi.fn(),gatewaySession:vi.fn(),gatewayCatalog:vi.fn(),gatewayCommand:vi.fn(),gatewaySend:vi.fn(),gatewayClose:vi.fn(),
@@ -25,12 +27,14 @@ vi.mock('../lib/vault',()=>({WorkspaceVault:{open:f.open}}));
 vi.mock('../lib/native',()=>({
   nativeAvailable:()=>true,probeSsh:f.probe,connectSsh:f.connect,disconnectSsh:f.disconnect,
   writeSsh:f.writeSsh,resizeSsh:f.resizeSsh,streamHermes:f.stream,probeHermes:vi.fn(),
+  hermesHttp:f.hermesHttp,
   onDesktopClose:f.onDesktopClose,destroyWindow:f.destroyWindow,
 }));
 const profile:VpsProfile={id:'vps-1',name:'My VPS',host:'example.test',port:22,username:'deploy',auth:'password',password:'secret',privateKey:'',passphrase:''};
 beforeEach(()=>{
   setLanguage('id');
   f.gatewayObservers=[];
+  f.hermesHttp.mockReset();
   vi.resetAllMocks(); f.state=emptyState(); f.state.vps=[{...profile}];
   f.state.hermes=[{id:'hermes-1',name:'Hermes',url:'https://hermes.example/v1',token:'token',model:'hermes-agent'}];
   f.write.mockResolvedValue(undefined);f.close.mockResolvedValue(undefined);f.disconnect.mockResolvedValue(undefined);
@@ -561,5 +565,377 @@ describe('chat request durability and routing',()=>{
     act(()=>h.result.current.saveHermes({...f.state!.hermes[0],url:'https://new.example'}));
     expect(h.result.current.state.hermes).toHaveLength(2);
     expect(h.result.current.state.conversations[0].profileId).toBe('hermes-1');
+  });
+});
+
+describe('Extended slash commands suite', () => {
+  afterEach(() => {
+    clearTerminalRegistry();
+  });
+
+  it('/lastcmd captures recent lines from active terminal and inserts into composer', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    // Error when no active terminal session
+    await act(async () => {
+      await h.result.current.runCommand(id, '/lastcmd');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)).toMatchObject({
+      status: 'error',
+    });
+
+    // Connect VPS terminal session with verified fingerprint
+    f.state!.vps[0].fingerprint = 'SHA256:verified';
+    await act(async () => {
+      await h.result.current.connectVps('vps-1');
+    });
+    const sessionId = h.result.current.activeSessionId!;
+    expect(sessionId).toBeTruthy();
+
+    // Register terminal with test buffer
+    const mockTerm = {
+      _testBuffer: ['line 1', 'line 2', '$ git status', 'On branch main'],
+    } as any;
+    registerTerminal(sessionId, mockTerm);
+
+    // Run /lastcmd 2
+    await act(async () => {
+      await h.result.current.runCommand(id, '/lastcmd 2');
+    });
+
+    const conv = h.result.current.state.conversations[0];
+    expect(conv.commandResults?.at(-1)?.status).toBe('complete');
+    expect(conv.draft).toContain('```terminal\n$ git status\nOn branch main\n```');
+
+    // Run alias /term with empty buffer returns error
+    mockTerm._testBuffer = [];
+    await act(async () => {
+      await h.result.current.runCommand(id, '/term');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
+  });
+
+  it('/clear visually clears messages without resetting server session or conversation title', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+      h.result.current.setDraft(id, 'Halo');
+    });
+    await act(async () => {
+      await h.result.current.sendMessage(id);
+    });
+    expect(h.result.current.state.conversations[0].messages.length).toBeGreaterThan(0);
+    const originalTitle = h.result.current.state.conversations[0].title;
+
+    // Run /clear
+    await act(async () => {
+      await h.result.current.runCommand(id, '/clear');
+    });
+
+    const conv = h.result.current.state.conversations[0];
+    expect(conv.messages).toEqual([]);
+    expect(conv.title).toBe(originalTitle);
+    expect(conv.commandResults?.at(-1)?.status).toBe('complete');
+
+    // Rejects unexpected arguments
+    await act(async () => {
+      await h.result.current.runCommand(id, '/clear all');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
+  });
+
+  it('/retry re-sends the last user message immediately', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    // Error when no user message exists yet
+    await act(async () => {
+      await h.result.current.runCommand(id, '/retry');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
+
+    // Send first message
+    act(() => {
+      h.result.current.setDraft(id, 'Analyze telemetry');
+    });
+    await act(async () => {
+      await h.result.current.sendMessage(id);
+    });
+    expect(f.stream).toHaveBeenCalledTimes(1);
+
+    // Call /retry
+    await act(async () => {
+      await h.result.current.runCommand(id, '/retry');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('complete');
+  });
+
+  it('/fork duplicates history into a new conversation tab', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+      h.result.current.setDraft(id, 'First turn');
+    });
+    await act(async () => {
+      await h.result.current.sendMessage(id);
+    });
+
+    const beforeCount = h.result.current.state.conversations.length;
+    await act(async () => {
+      await h.result.current.runCommand(id, '/fork Experimental Branch');
+    });
+
+    expect(h.result.current.state.conversations.length).toBe(beforeCount + 1);
+    const active = h.result.current.state.conversations.find(c => c.id === h.result.current.activeConversationId);
+    expect(active?.title).toBe('Experimental Branch');
+    expect(active?.messages.length).toBe(2);
+    expect(active?.id).not.toBe(id);
+  });
+
+  it('/export exports conversation transcript to Markdown or JSON', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+      h.result.current.setDraft(id, 'Hello world');
+    });
+    await act(async () => {
+      await h.result.current.sendMessage(id);
+    });
+
+    // Export markdown (default)
+    await act(async () => {
+      await h.result.current.runCommand(id, '/export');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('complete');
+
+    // Export JSON
+    await act(async () => {
+      await h.result.current.runCommand(id, '/export json');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('complete');
+
+    // Rejects invalid format
+    await act(async () => {
+      await h.result.current.runCommand(id, '/export xml');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
+  });
+
+  it('/status queries Hermes server over HTTP and displays latency card', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    f.hermesHttp.mockResolvedValueOnce(JSON.stringify({ status: 'ok', features: ['Chat API'] }));
+    f.hermesHttp.mockResolvedValueOnce(JSON.stringify({ data: [{ id: 'hermes-3' }] }));
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/status');
+    });
+
+    const result = h.result.current.state.conversations[0].commandResults?.at(-1);
+    expect(result?.status).toBe('complete');
+    expect(result?.content).toContain('Latency');
+    expect(result?.content).toContain('Healthy / Online');
+    expect(result?.content).toContain('Hermes');
+    expect(result?.content).toContain('https://hermes.example/v1');
+  });
+
+  it('/models queries available models and /model switches active model', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    f.hermesHttp.mockResolvedValueOnce(JSON.stringify({
+      data: [{ id: 'hermes-3-70b' }, { id: 'qwen-2.5-coder' }],
+    }));
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/models');
+    });
+
+    const result = h.result.current.state.conversations[0].commandResults?.at(-1);
+    expect(result?.status).toBe('complete');
+    expect(result?.content).toContain('hermes-3-70b');
+    expect(result?.content).toContain('qwen-2.5-coder');
+
+    // Switch model with /model
+    f.hermesHttp.mockResolvedValueOnce(JSON.stringify({
+      data: [{ id: 'qwen-2.5-coder' }],
+    }));
+    await act(async () => {
+      await h.result.current.runCommand(id, '/model qwen-2.5-coder');
+    });
+
+    const switchResult = h.result.current.state.conversations[0].commandResults?.at(-1);
+    expect(switchResult?.status).toBe('complete');
+    expect(switchResult?.content).toContain('qwen-2.5-coder');
+    expect(h.result.current.state.conversations[0].model).toBe('qwen-2.5-coder');
+  });
+
+  it('/skills and /tools query loaded agent capabilities from server', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    // /skills
+    f.hermesHttp.mockResolvedValueOnce(JSON.stringify({
+      data: [
+        { name: 'frontend-craftsmanship', description: 'Polished responsive UI' },
+      ],
+    }));
+    await act(async () => {
+      await h.result.current.runCommand(id, '/skills');
+    });
+    const skillsRes = h.result.current.state.conversations[0].commandResults?.at(-1);
+    expect(skillsRes?.status).toBe('complete');
+    expect(skillsRes?.content).toContain('frontend-craftsmanship');
+
+    // /tools
+    f.hermesHttp.mockResolvedValueOnce(JSON.stringify({
+      toolsets: [
+        { name: 'terminal', description: 'Execute shell commands', tools: ['exec'] },
+      ],
+    }));
+    await act(async () => {
+      await h.result.current.runCommand(id, '/tools');
+    });
+    const toolsRes = h.result.current.state.conversations[0].commandResults?.at(-1);
+    expect(toolsRes?.status).toBe('complete');
+    expect(toolsRes?.content).toContain('terminal');
+  });
+
+  it('/stop reports when no active task is running', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/stop');
+    });
+
+    const stopRes = h.result.current.state.conversations[0].commandResults?.at(-1);
+    expect(stopRes?.status).toBe('complete');
+    expect(stopRes?.content).toContain('Tidak ada pekerjaan Agent yang sedang berjalan.');
+  });
+
+  it('/stop aborts active HTTP stream and marks message as stopped', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+      h.result.current.setDraft(id, 'Stream prompt');
+    });
+
+    const streamGate = deferred();
+    f.stream.mockImplementationOnce(async (_request: HermesRequest, onEvent: (e: HermesEvent) => void) => {
+      onEvent({ type: 'delta', text: 'Partial text...' });
+      await streamGate.promise;
+    });
+
+    let sendPromise: Promise<void>;
+    act(() => {
+      sendPromise = h.result.current.sendMessage(id);
+    });
+
+    expect(h.result.current.streamingIds.has(id)).toBe(true);
+
+    // Call /stop while streaming
+    await act(async () => {
+      await h.result.current.runCommand(id, '/stop');
+    });
+
+    streamGate.resolve();
+    await act(async () => {
+      await sendPromise;
+    });
+
+    const conv = h.result.current.state.conversations[0];
+    const assistantMsg = conv.messages.find(m => m.role === 'assistant');
+    expect(assistantMsg?.status).toBe('error');
+    expect(assistantMsg?.error).toBe('Dihentikan oleh pengguna.');
+  });
+
+  it('handles offline / unreachable server for /status, /skills, /tools gracefully', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    f.hermesHttp.mockRejectedValue(new Error('Connection timed out'));
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/status');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/skills');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/tools');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
+  });
+
+  it('ignores rapid concurrent command dispatch while a command is pending', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    f.hermesHttp.mockImplementation(async () => {
+      await new Promise(r => setTimeout(r, 20));
+      return JSON.stringify({ data: [{ id: 'hermes-3' }] });
+    });
+
+    let p1: Promise<void>;
+    let p2: Promise<void>;
+    act(() => {
+      p1 = h.result.current.runCommand(id, '/models');
+      p2 = h.result.current.runCommand(id, '/models');
+    });
+
+    await act(async () => {
+      await Promise.all([p1, p2]);
+    });
+
+    // Only one command execution occurred
+    expect(f.hermesHttp).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects unexpected arguments for /help', async () => {
+    const h = await opened();
+    let id = '';
+    act(() => {
+      id = h.result.current.createConversation('hermes-1');
+    });
+
+    await act(async () => {
+      await h.result.current.runCommand(id, '/help extra');
+    });
+    expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('error');
   });
 });

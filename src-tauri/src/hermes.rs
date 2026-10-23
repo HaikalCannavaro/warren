@@ -194,6 +194,71 @@ async fn probe_inner(url: &str, token: &str) -> Result<HermesCapabilities, Failu
     })
 }
 
+#[tauri::command]
+pub async fn hermes_http(
+    url: String,
+    token: String,
+    endpoint_path: String,
+    method: Option<String>,
+    body: Option<String>,
+) -> Result<String, String> {
+    hermes_http_inner(&url, &token, &endpoint_path, method.as_deref().unwrap_or("GET"), body.as_deref())
+        .await
+        .map_err(|error| error.message)
+}
+
+async fn hermes_http_inner(
+    url: &str,
+    token: &str,
+    endpoint_path: &str,
+    method: &str,
+    body: Option<&str>,
+) -> Result<String, Failure> {
+    let base = normalize_base_url(url)?;
+    let auth = authorization(token)?;
+    let clean_path = endpoint_path.trim_start_matches('/');
+    let target_url = if clean_path == "health" {
+        let mut u = base.clone();
+        let parent = u.path().trim_end_matches('/').strip_suffix("/v1").unwrap_or("");
+        u.set_path(&format!("{parent}/health"));
+        u
+    } else {
+        endpoint(&base, clean_path.strip_prefix("v1/").unwrap_or(clean_path))
+    };
+    let c = client()?;
+    let req = match method.to_ascii_uppercase().as_str() {
+        "POST" => {
+            let mut r = c.post(target_url)
+                .header(header::AUTHORIZATION, auth)
+                .header(header::ACCEPT, "application/json")
+                .header(header::CONTENT_TYPE, "application/json")
+                .timeout(Duration::from_secs(20));
+            if let Some(b) = body {
+                r = r.body(b.to_owned());
+            }
+            r
+        }
+        _ => {
+            c.get(target_url)
+                .header(header::AUTHORIZATION, auth)
+                .header(header::ACCEPT, "application/json")
+                .timeout(Duration::from_secs(20))
+        }
+    };
+    let response = req.send().await
+        .map_err(|_| Failure::certain("Could not reach the authenticated Hermes endpoint. Check the address, network, and TLS certificate."))?;
+    if !response.status().is_success() {
+        return Err(http_failure(response.status()));
+    }
+    let bytes = response.bytes().await
+        .map_err(|_| Failure::certain("The endpoint response was interrupted."))?;
+    if bytes.len() > MAX_STREAM_BYTES {
+        return Err(Failure::certain("The endpoint response exceeded the safe size limit."));
+    }
+    String::from_utf8(bytes.to_vec())
+        .map_err(|_| Failure::certain("The endpoint did not return valid UTF-8 text."))
+}
+
 fn validate_request(request: &HermesRequest) -> Result<(), Failure> {
     for (id, max) in [(&request.request_id, 255), (&request.conversation_id, 256)] {
         if id.is_empty() || id.len() > max || !id.bytes().all(|b| b.is_ascii_graphic()) {

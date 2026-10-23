@@ -1,9 +1,11 @@
-import { translate } from '../lib/i18n';
+import { getLocale, translate } from '../lib/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CommandResult, Conversation, ExecutionLogEntry, HermesEvent, HermesProfile, Message, SavedState, Settings, SlashCommand, TerminalSession, VpsProfile } from '../types';
 import { conversationHistory, emptyState, errorText, normalizeAgentProfileName, normalizeGatewayUrl, normalizeHermesUrl, validateVps } from '../lib/domain';
 import { appendExecutionLog, interruptExecutionLog, MAX_LOG_TEXT } from '../lib/executionLog';
-import { basicSlashCommands, formatCommandHelp, parseSlashCommand, sanitizeCommandResults } from '../lib/slashCommands';
+import { basicSlashCommands, extendedSlashCommands, formatCommandHelp, parseSlashCommand, sanitizeCommandResults } from '../lib/slashCommands';
+import { captureTerminalBuffer } from '../lib/terminalBridge';
+import { fetchHermesModels, fetchHermesSkills, fetchHermesToolsets, postHermesStop, queryHermesStatus } from '../lib/hermesHttpClient';
 import { GatewayClient } from '../lib/gatewayClient';
 import * as native from '../lib/native';
 import { WorkspaceVault } from '../lib/vault';
@@ -33,6 +35,7 @@ export function useWorkspace() {
   const [streamingIds,setStreamingIds]=useState<Set<string>>(new Set());
   const activeRequests=useRef(new Set<string>());
   const detachedRequests=useRef(new Set<string>());
+  const activeRequestIds=useRef(new Map<string,string>());
   const [toolActivity,setToolActivity]=useState<Record<string,string>>({});
   const [commandBusyIds,setCommandBusyIds]=useState<Set<string>>(new Set());
   const pendingCommands=useRef(new Set<string>());
@@ -326,13 +329,21 @@ export function useWorkspace() {
     const existing=pendingCatalogs.current.get(id);if(existing)return existing;
     const conversation=stateRef.current.conversations.find(c=>c.id===id);
     const profile=stateRef.current.hermes.find(p=>p.id===conversation?.profileId);
-    if(!profile || preview || profile.transport!=='gateway') {setCommandCatalog(current=>({...current,[id]:basicSlashCommands()}));return;}
+    if(!profile || preview || profile.transport!=='gateway') {
+      setCommandCatalog(current=>({...current,[id]:extendedSlashCommands(profile?.transport??'openai')}));
+      return;
+    }
     const version=transitionVersion.current;
     const loading=(async()=>{
       try {
         const {client,sessionId}=await gatewaySession(id);
-        const commands=await client.catalog(sessionId);
-        if(version===transitionVersion.current)setCommandCatalog(current=>({...current,[id]:commands}));
+        const serverCommands=await client.catalog(sessionId);
+        const localCommands=extendedSlashCommands('gateway').filter(c=>['workspace','session'].includes(c.category??''));
+        const merged=[...serverCommands];
+        for(const local of localCommands){
+          if(!merged.some(c=>c.name.replace(/^\//,'')===local.name))merged.push(local);
+        }
+        if(version===transitionVersion.current)setCommandCatalog(current=>({...current,[id]:merged}));
       }finally{pendingCatalogs.current.delete(id);setCommandsLoadingIds(new Set(pendingCatalogs.current.keys()));}
     })();
     pendingCatalogs.current.set(id,loading);setCommandsLoadingIds(new Set(pendingCatalogs.current.keys()));
@@ -346,7 +357,8 @@ export function useWorkspace() {
     const profile=stateRef.current.hermes.find(p=>p.id===conversation.profileId);
     if(!profile){setError(translate("This conversation’s connection has been deleted.", "Koneksi percakapan sudah dihapus."));return;}
     const parsed=parseSlashCommand(text);
-    const base=basicSlashCommands().find(c=>c.name===parsed?.name);
+    const availableSuite=commandCatalog[id]??extendedSlashCommands(profile.transport??'openai');
+    const base=availableSuite.find(c=>c.name===parsed?.name||c.aliases?.includes(parsed?.name??''))??basicSlashCommands().find(c=>c.name===parsed?.name);
     if(activeRequests.current.has(id)&&!base?.allowWhileRunning){setError(translate("Wait for the Agent to finish before running this command.", "Tunggu pekerjaan Agent selesai sebelum menjalankan perintah ini."));return;}
     const version=transitionVersion.current;
     const resultId=crypto.randomUUID();
@@ -361,41 +373,195 @@ export function useWorkspace() {
       await persist();
       if(version!==transitionVersion.current)return;
       if(!parsed||!base)throw new Error(translate("Warren does not support this command yet. Type /help for the list. Use // to send text starting with /.", "Perintah belum didukung Warren. Ketik /help untuk melihat daftar. Gunakan // untuk teks berawalan /."));
-      if(parsed.name==='help') {
+      const cmdName=parsed.name;
+      if(cmdName==='help') {
         if(parsed.args)throw new Error(translate("Use /help without arguments.", "Gunakan /help tanpa argumen."));
-        complete('complete',formatCommandHelp(commandCatalog[id]??basicSlashCommands()));
-      } else if(parsed.name==='new') {
+        complete('complete',formatCommandHelp(commandCatalog[id]??extendedSlashCommands(profile.transport??'openai')));
+      } else if(cmdName==='new') {
         const newId=createConversation(profile.id);
         if(parsed.args)updateConversation(newId,c=>({...c,title:parsed.args.slice(0,80)}));
         complete('complete',translate("New conversation created. Your previous history is still saved.", "Percakapan baru dibuat. Riwayat sebelumnya tetap tersimpan."));
+      } else if(cmdName==='lastcmd'||cmdName==='term') {
+        if(!activeSessionId)throw new Error(translate("No active terminal session. Open a terminal session first.", "Tidak ada sesi terminal aktif. Buka sesi terminal terlebih dahulu."));
+        const linesArg=parsed.args?parseInt(parsed.args.trim(),10):20;
+        const lines=isNaN(linesArg)||linesArg<=0?20:linesArg;
+        const captured=captureTerminalBuffer(activeSessionId,lines);
+        if(!captured||!captured.trim())throw new Error(translate("The active terminal buffer is empty.", "Buffer terminal aktif masih kosong."));
+        const session=liveSessions.current.get(activeSessionId);
+        const label=session?.label||'terminal';
+        const snippet=`\`\`\`terminal\n${captured}\n\`\`\``;
+        updateConversation(id,c=>({...c,draft:c.draft.trim()?`${c.draft.trim()}\n\n${snippet}\n`:`${snippet}\n`}));
+        complete('complete',translate(`Captured last ${lines} lines from active terminal (${label}). Context inserted into composer.`, `Menyalin ${lines} baris terakhir dari terminal aktif (${label}). Konteks dimasukkan ke kolom pesan.`));
+      } else if(cmdName==='clear') {
+        if(parsed.args.trim())throw new Error(translate("Use /clear without arguments.", "Gunakan /clear tanpa argumen."));
+        updateConversation(id,c=>({...c,messages:[]}));
+        complete('complete',translate("Conversation messages cleared.", "Pesan percakapan telah dibersihkan."));
+      } else if(cmdName==='retry') {
+        if(parsed.args.trim())throw new Error(translate("Use /retry without arguments.", "Gunakan /retry tanpa argumen."));
+        const conv=stateRef.current.conversations.find(c=>c.id===id);
+        const lastUser=[...(conv?.messages??[])].reverse().find(m=>m.role==='user');
+        if(!lastUser||!lastUser.content.trim())throw new Error(translate("No previous user message to retry.", "Tidak ada pesan pengguna sebelumnya untuk diulang."));
+        if(activeRequests.current.has(id))throw new Error(translate("Wait for the Agent to finish before retrying.", "Tunggu pekerjaan Agent selesai sebelum mengulang."));
+        complete('complete',translate(`Retrying last user message: "${lastUser.content.slice(0,50)}…"`, `Mengulang pesan pengguna terakhir: "${lastUser.content.slice(0,50)}…"`));
+        const retryText=lastUser.content;
+        queueMicrotask(()=>{void dispatchUserMessage(id,retryText);});
+      } else if(cmdName==='fork') {
+        const conv=stateRef.current.conversations.find(c=>c.id===id);
+        if(!conv)throw new Error(translate("Conversation not found.", "Percakapan tidak ditemukan."));
+        const forkedTitle=parsed.args.trim()?parsed.args.trim().slice(0,80):`${conv.title} (${translate("Fork", "Cabang")})`;
+        const newId=`${stateRef.current.deviceId}:${crypto.randomUUID()}`;
+        const forked:Conversation={
+          ...conv,id:newId,title:forkedTitle,createdAt:Date.now(),draft:'',
+          gatewaySessionId:undefined,gatewayStateUncertain:false,
+          messages:conv.messages.map(m=>({...m,id:crypto.randomUUID()})),
+          commandResults:(conv.commandResults??[]).map(r=>({...r,id:crypto.randomUUID()})),
+          executionLog:(conv.executionLog??[]).map(e=>({...e,id:crypto.randomUUID()})),
+        };
+        commit(s=>({...s,conversations:[forked,...s.conversations],activeConversationId:newId}));
+        setActiveConversationId(newId);
+        complete('complete',translate(`Conversation forked to "${forkedTitle}".`, `Percakapan dicabangkan ke "${forkedTitle}".`));
+      } else if(cmdName==='export') {
+        const conv=stateRef.current.conversations.find(c=>c.id===id);
+        if(!conv)throw new Error(translate("Conversation not found.", "Percakapan tidak ditemukan."));
+        const formatArg=(parsed.args.trim().toLowerCase()||'md');
+        if(!['md','markdown','json'].includes(formatArg))throw new Error(translate("Unsupported format. Use /export md or /export json.", "Format tidak didukung. Gunakan /export md atau /export json."));
+        const isJson=formatArg==='json';
+        const dateStr=new Date(conv.createdAt).toLocaleString(getLocale());
+        const profileName=profile.name;
+        const agentLabel=conv.agentProfile||profile.agentProfile||'Agent';
+        let exportContent='';
+        if(isJson){
+          exportContent=JSON.stringify({title:conv.title,createdAt:conv.createdAt,date:dateStr,profile:profileName,agentProfile:agentLabel,messages:conv.messages.map(m=>({role:m.role,content:m.content,createdAt:m.createdAt,agentProfile:m.agentProfile}))},null,2);
+        }else{
+          const lines=[`# ${conv.title}`,`*Date: ${dateStr}*`,`*Agent: ${profileName} (${agentLabel})*`,'','---',''];
+          for(const msg of conv.messages){
+            const roleLabel=msg.role==='user'?'User':(msg.agentProfile||agentLabel);
+            const time=new Date(msg.createdAt).toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit'});
+            lines.push(`### ${roleLabel} (${time})`,'',msg.content,'');
+          }
+          exportContent=lines.join('\n');
+        }
+        const extension=isJson?'json':'md';
+        const slug=conv.title.toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-|-$/g,'')||'conversation';
+        const filename=`${slug}-${Date.now()}.${extension}`;
+        if(typeof document!=='undefined'&&typeof Blob!=='undefined'){
+          try{
+            const blob=new Blob([exportContent],{type:isJson?'application/json':'text/markdown'});
+            const url=URL.createObjectURL(blob);
+            const link=document.createElement('a');link.href=url;link.download=filename;document.body.appendChild(link);link.click();document.body.removeChild(link);URL.revokeObjectURL(url);
+          }catch{}
+        }
+        if(typeof navigator!=='undefined'&&navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(exportContent);}catch{}}
+        complete('complete',translate(`Exported ${conv.messages.length} messages as ${extension.toUpperCase()} (${filename}).`, `Berhasil mengekspor ${conv.messages.length} pesan sebagai ${extension.toUpperCase()} (${filename}).`));
+      } else if(cmdName==='stop') {
+        if(profile.transport==='gateway'){
+          const {client,sessionId}=await gatewaySession(id);
+          complete('complete',await client.command(sessionId,'/stop'));
+        }else{
+          if(activeRequests.current.has(id)){
+            detachedRequests.current.add(id);
+            const reqId=activeRequestIds.current.get(id);
+            if(reqId)void postHermesStop(profile.url,profile.token,reqId).catch(()=>{});
+            activeRequests.current.delete(id);
+            setStreamingIds(new Set(activeRequests.current));
+            updateConversation(id,c=>({...c,messages:c.messages.map(m=>m.status==='streaming'?{...m,status:'error',error:translate("Stopped by user.", "Dihentikan oleh pengguna.")}:m)}));
+            complete('complete',translate("Agent task stopped.", "Pekerjaan Agent dihentikan."));
+          }else{
+            complete('complete',translate("No active Agent task is running.", "Tidak ada pekerjaan Agent yang sedang berjalan."));
+          }
+        }
+      } else if(cmdName==='status') {
+        if(profile.transport==='gateway'){
+          const {client,sessionId}=await gatewaySession(id);
+          complete('complete',await client.command(sessionId,'/status'));
+        }else{
+          const res=await queryHermesStatus(profile.url,profile.token);
+          const statusLines=[
+            `Server: ${profile.name} (${profile.url})`,
+            `Status: Healthy / Online`,
+            `Latency: ${res.latencyMs} ms`,
+            `Agent Profile: ${conversation.agentProfile||profile.agentProfile||'Default'}`,
+            `Configured Model: ${conversation.model||profile.model}`,
+            `Features: ${res.features.join(', ')}`,
+          ];
+          if(res.modelsCount!==undefined)statusLines.push(`Available Models: ${res.modelsCount}`);
+          complete('complete',statusLines.join('\n'));
+        }
+      } else if(cmdName==='models'||(cmdName==='model'&&profile.transport!=='gateway')) {
+        if(profile.transport==='gateway'&&cmdName==='model'){
+          if(conversation.gatewayStateUncertain||conversation.commandResults?.some(r=>r.status==='unknown'&&['model','compact'].includes(parseSlashCommand(r.command)?.name??'')))throw new Error(translate("The previous command’s result is unknown. Check Hermes and start a new conversation before changing this session.", "Hasil perintah sebelumnya belum diketahui. Periksa Hermes dan mulai percakapan baru sebelum mengubah sesi."));
+          const {client,sessionId}=await gatewaySession(id);
+          complete('complete',await client.command(sessionId,`/model${parsed.args?` ${parsed.args}`:''}`));
+        }else{
+          const models=await fetchHermesModels(profile.url,profile.token);
+          const targetModel=parsed.args.trim().split(/\s+/)[0];
+          if(cmdName==='model'&&targetModel){
+            const valid=models.some(m=>m.id.toLowerCase()===targetModel.toLowerCase());
+            if(!valid)throw new Error(translate(`Model "${targetModel}" is not available on this server.`, `Model "${targetModel}" tidak tersedia di server ini.`));
+            updateConversation(id,c=>({...c,model:targetModel}));
+            complete('complete',translate(`Active model switched to "${targetModel}".`, `Model aktif diubah menjadi "${targetModel}".`));
+          }else{
+            const currentModel=conversation.model||profile.model;
+            if(!models.length){
+              complete('complete',translate("No models returned by Hermes server.", "Tidak ada model yang dikembalikan oleh server Hermes."));
+            }else{
+              const modelList=models.map(m=>`• ${m.id}${m.id===currentModel?` (${translate("current", "aktif")})`:''}`).join('\n');
+              complete('complete',`${translate("Available Models", "Model Tersedia")} (${models.length}):\n${modelList}\n\n${translate("Use /model <model-id> to switch model.", "Gunakan /model <model-id> untuk mengganti model.")}`);
+            }
+          }
+        }
+      } else if(cmdName==='skills') {
+        const skills=await fetchHermesSkills(profile.url,profile.token);
+        if(!skills.length){
+          complete('complete',translate("No loaded skills advertised by this Hermes server.", "Tidak ada skill yang dilaporkan oleh server Hermes ini."));
+        }else{
+          const skillsList=skills.map(s=>`• ${s.name}${s.description?` — ${s.description}`:''}${s.category?` [${s.category}]`:''}`).join('\n');
+          complete('complete',`${translate("Loaded Agent Skills", "Skill Agent Dimuat")} (${skills.length}):\n${skillsList}`);
+        }
+      } else if(cmdName==='tools') {
+        const toolsets=await fetchHermesToolsets(profile.url,profile.token);
+        if(!toolsets.length){
+          complete('complete',translate("No toolsets advertised by this Hermes server.", "Tidak ada toolset yang dilaporkan oleh server Hermes ini."));
+        }else{
+          const toolList=toolsets.map(t=>`• ${t.name}${t.description?` — ${t.description}`:''}${t.tools?.length?` (${t.tools.join(', ')})`:''}`).join('\n');
+          complete('complete',`${translate("Available Toolsets", "Toolset Tersedia")} (${toolsets.length}):\n${toolList}`);
+        }
       } else {
-        if(profile.transport!=='gateway')throw new Error(translate("This command requires a Hermes Gateway connection. Chat API endpoints do not run slash commands.", "Perintah ini memerlukan koneksi Gateway Hermes. Endpoint chat API tidak menjalankan slash command."));
-        if(['model','compact'].includes(parsed.name)&&(conversation.gatewayStateUncertain||conversation.commandResults?.some(r=>r.status==='unknown'&&['model','compact'].includes(parseSlashCommand(r.command)?.name??''))))throw new Error(translate("The previous command’s result is unknown. Check Hermes and start a new conversation before changing this session.", "Hasil perintah sebelumnya belum diketahui. Periksa Hermes dan mulai percakapan baru sebelum mengubah sesi."));
+        if(profile.transport!=='gateway'){
+          if(cmdName==='compact')throw new Error(translate("Compacting context requires a Hermes Gateway session.", "Meringkas konteks memerlukan sesi Gateway Hermes."));
+          if(cmdName==='usage')throw new Error(translate("Usage stats are available on compatible Hermes Gateway sessions.", "Statistik pemakaian tersedia pada sesi Gateway Hermes yang kompatibel."));
+          throw new Error(translate("This command requires a Hermes Gateway connection. Chat API endpoints do not run slash commands.", "Perintah ini memerlukan koneksi Gateway Hermes. Endpoint chat API tidak menjalankan slash command."));
+        }
+        if(['model','compact'].includes(cmdName)&&(conversation.gatewayStateUncertain||conversation.commandResults?.some(r=>r.status==='unknown'&&['model','compact'].includes(parseSlashCommand(r.command)?.name??''))))throw new Error(translate("The previous command’s result is unknown. Check Hermes and start a new conversation before changing this session.", "Hasil perintah sebelumnya belum diketahui. Periksa Hermes dan mulai percakapan baru sebelum mengubah sesi."));
         const {client,sessionId}=await gatewaySession(id);
         const commands=await client.catalog(sessionId);
         if(version!==transitionVersion.current)return;
         setCommandCatalog(current=>({...current,[id]:commands}));
-        const command=commands.find(c=>c.name.replace(/^\//,'')===parsed.name);
+        const command=commands.find(c=>c.name.replace(/^\//,'')===cmdName);
         if(!command?.available)throw new Error(command?.reason??translate("The Gateway does not support this command.", "Gateway tidak mendukung perintah ini."));
-        complete('complete',await client.command(sessionId,`/${parsed.name}${parsed.args?` ${parsed.args}`:''}`));
+        complete('complete',await client.command(sessionId,`/${cmdName}${parsed.args?` ${parsed.args}`:''}`));
       }
     }catch(cause){complete(!!cause&&typeof cause==='object'&&'uncertain' in cause&&cause.uncertain?'unknown':'error',errorText(cause));}
     finally{pendingCommands.current.delete(id);setCommandBusyIds(new Set(pendingCommands.current));if(version===transitionVersion.current)await persist().catch(()=>{});}
   };
-  const sendMessage=async(id:string)=>{
+  const dispatchUserMessage=async(id:string,textOverride?:string)=>{
     if(!canInteract())return;
     if(preview){setError(translate("Open Warren on Windows or Android to send messages to Hermes.", "Hubungkan melalui aplikasi Tauri untuk mengirim ke Hermes."));return;}
-    const c=stateRef.current.conversations.find(c=>c.id===id);if(!c||!c.draft.trim())return;
-    if(c.draft.trim().startsWith('/')&&!c.draft.trim().startsWith('//'))return runCommand(id,c.draft.trim());
+    const c=stateRef.current.conversations.find(c=>c.id===id);if(!c)return;
+    const rawDraft=textOverride!==undefined?textOverride:c.draft.trim();
+    if(!rawDraft)return;
+    if(textOverride===undefined&&rawDraft.startsWith('/')&&!rawDraft.startsWith('//'))return runCommand(id,rawDraft);
     if(activeRequests.current.has(id)||pendingCommands.current.has(id))return;
     const profile=stateRef.current.hermes.find(p=>p.id===c.profileId);if(!profile){setError(translate("The Agent connection has been deleted. This conversation is archived.", "Profil Hermes sudah dihapus. Percakapan ini merupakan arsip."));return;}
     if(c.messages.some(m=>m.status==='unknown')){setError(translate("A task in this conversation has an unknown result. Check Hermes, then start a new conversation to avoid resending the task.", "Percakapan memiliki tugas dengan hasil belum diketahui. Periksa Hermes lalu mulai percakapan baru agar tugas tidak dikirim ulang."));return;}
     if(c.gatewayStateUncertain||c.commandResults?.some(r=>r.status==='unknown'&&['model','compact'].includes(parseSlashCommand(r.command)?.name??''))){setError(translate("A session change has an unknown result. Check Hermes, then start a new conversation.", "Status perubahan sesi belum diketahui. Periksa Hermes lalu mulai percakapan baru."));return;}
-    const draft=c.draft.trim();const text=draft.startsWith('//')?draft.slice(1):draft;const requestId=crypto.randomUUID();const assistantId=crypto.randomUUID();let receivedTerminal=false;let dispatched=false;let receivedResponse=false;
+    const text=rawDraft.startsWith('//')?rawDraft.slice(1):rawDraft;const requestId=crypto.randomUUID();const assistantId=crypto.randomUUID();
+    activeRequestIds.current.set(id,requestId);
+    let receivedTerminal=false;let dispatched=false;let receivedResponse=false;
     const user:Message={id:crypto.randomUUID(),role:'user',content:text,createdAt:Date.now(),status:'sent'};
     const assistant:Message={id:assistantId,role:'assistant',content:'',createdAt:Date.now(),status:'streaming',requestId,agentProfile:normalizeAgentProfileName(profile.transport==='gateway'?c.agentProfile??profile.agentProfile:profile.agentProfile)};
     activeRequests.current.add(id);setStreamingIds(new Set(activeRequests.current));
-    const next=updateConversation(id,current=>({...current,draft:'',title:current.messages.length?current.title:text.slice(0,45),messages:[...current.messages,user,assistant],executionLog:appendExecutionLog(current.executionLog,requestId,'request',translate("Request started.", "Permintaan dimulai."))}));
+    const next=updateConversation(id,current=>({...current,draft:textOverride!==undefined?current.draft:'',title:current.messages.length?current.title:text.slice(0,45),messages:[...current.messages,user,assistant],executionLog:appendExecutionLog(current.executionLog,requestId,'request',translate("Request started.", "Permintaan dimulai."))}));
     const updateMessage=(patch:Partial<Message>,append?:string,log?:{kind:ExecutionLogEntry['kind'];text:string})=>updateConversation(id,current=>({...current,
       messages:current.messages.map(m=>m.id===assistantId?{...m,...patch,content:append===undefined?(patch.content??m.content):m.content+append}:m),
       executionLog:log?appendExecutionLog(current.executionLog,requestId,log.kind,log.text):current.executionLog,
@@ -433,12 +599,14 @@ export function useWorkspace() {
         await client.send(sessionId,text,requestId,onEvent);
       }else{
         dispatched=true;
-        await native.streamHermes({requestId,conversationId:id,url:profile.url,token:profile.token,model:profile.model,messages:conversationHistory(next.conversations.find(c=>c.id===id)!)},onEvent);
+        const activeModel=next.conversations.find(conv=>conv.id===id)?.model||profile.model;
+        await native.streamHermes({requestId,conversationId:id,url:profile.url,token:profile.token,model:activeModel,messages:conversationHistory(next.conversations.find(c=>c.id===id)!)},onEvent);
       }
       if(!receivedTerminal && !detachedRequests.current.has(id))finish('unknown',translate("The connection ended without a confirmed result from Hermes. The request was not resent.", "Koneksi berakhir tanpa konfirmasi hasil dari Hermes. Tidak dikirim ulang."));
     } catch(e){if(!receivedTerminal && !detachedRequests.current.has(id))finish(dispatched&&!(e&&typeof e==='object'&&'uncertain' in e&&e.uncertain===false)?'unknown':'error',profile.transport==='gateway'||dispatched?errorText(e):translate("The message was not sent because the vault could not be saved.", "Pesan tidak dikirim karena brankas belum tersimpan."));}
-    finally{receivedTerminal=true;activeRequests.current.delete(id);detachedRequests.current.delete(id);setStreamingIds(new Set(activeRequests.current));setToolActivity(s=>{const n={...s};delete n[id];return n;});if(!transition.current)await persist().catch(()=>{});}
+    finally{receivedTerminal=true;activeRequests.current.delete(id);detachedRequests.current.delete(id);activeRequestIds.current.delete(id);setStreamingIds(new Set(activeRequests.current));setToolActivity(s=>{const n={...s};delete n[id];return n;});if(!transition.current)await persist().catch(()=>{});}
   };
+  const sendMessage=async(id:string)=>dispatchUserMessage(id);
 
   return {
     ready,preview,busy,error,saveError,state,unlock,lock,runUpdateInstallation,clearError:()=>setError(null),

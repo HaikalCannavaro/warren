@@ -23,6 +23,7 @@ export function setLanguage(next: Language) {
 }
 
 export function getLanguage(): Language { return language; }
+export function getLocale(): string { return language === 'id' ? 'id-ID' : 'en-US'; }
 export function translate(english: string, indonesian: string): string { return language === 'id' ? indonesian : english; }
 
 function subscribe(listener: () => void) {

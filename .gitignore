@@ -18,3 +18,4 @@ keystore.properties
 *.tsbuildinfo
 test-results/
 playwright-report/
+*.sqlite

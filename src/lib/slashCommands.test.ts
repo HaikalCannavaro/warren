@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { basicSlashCommands, formatCommandHelp, localizeSlashCommand, parseSlashCommand, sanitizeCommandResults } from './slashCommands';
+import { basicSlashCommands, extendedSlashCommands, formatCommandHelp, localizeSlashCommand, parseSlashCommand, sanitizeCommandResults } from './slashCommands';
 import { setLanguage } from './i18n';
 
 describe('slash command parsing', () => {
@@ -53,6 +53,37 @@ describe('default command capabilities and help', () => {
     expect(help).toContain('/compact [focus]');
     expect(help).toContain('Gateway');
     expect(help).not.toMatch(/undefined|\[object Object\]/);
+  });
+  it('extended slash commands suite organizes commands into 4 section categories', () => {
+    const commands = extendedSlashCommands('openai');
+    const categories = new Set(commands.map(c => c.category));
+    expect(categories).toEqual(new Set(['workspace', 'session', 'intel', 'system']));
+    expect(commands.filter(c => c.category === 'workspace').map(c => c.name)).toEqual(['lastcmd', 'term']);
+    expect(commands.filter(c => c.category === 'session').map(c => c.name)).toEqual(['new', 'fork', 'clear', 'retry', 'export', 'stop', 'compact']);
+    expect(commands.filter(c => c.category === 'intel').map(c => c.name)).toEqual(['models', 'model', 'skills', 'tools']);
+    expect(commands.filter(c => c.category === 'system').map(c => c.name)).toEqual(['status', 'help', 'usage']);
+  });
+  it('enables HTTP commands for openai transport and reserves gateway-only commands', () => {
+    const httpCommands = extendedSlashCommands('openai');
+    const availableHttp = httpCommands.filter(c => c.available).map(c => c.name);
+    expect(availableHttp).toContain('lastcmd');
+    expect(availableHttp).toContain('term');
+    expect(availableHttp).toContain('clear');
+    expect(availableHttp).toContain('retry');
+    expect(availableHttp).toContain('fork');
+    expect(availableHttp).toContain('export');
+    expect(availableHttp).toContain('models');
+    expect(availableHttp).toContain('model');
+    expect(availableHttp).toContain('skills');
+    expect(availableHttp).toContain('tools');
+    expect(availableHttp).toContain('status');
+    expect(availableHttp).toContain('stop');
+    expect(httpCommands.find(c => c.name === 'compact')?.available).toBe(false);
+    expect(httpCommands.find(c => c.name === 'usage')?.available).toBe(false);
+
+    const gatewayCommands = extendedSlashCommands('gateway');
+    expect(gatewayCommands.find(c => c.name === 'compact')?.available).toBe(true);
+    expect(gatewayCommands.find(c => c.name === 'usage')?.available).toBe(true);
   });
 });
 

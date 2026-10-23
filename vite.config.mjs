@@ -10,5 +10,14 @@ export default defineConfig({
     host: process.env.TAURI_DEV_HOST || '127.0.0.1',
     watch: { ignored: ['**/src-tauri/**'] },
   },
-  test: { environment: 'jsdom', include: ['src/**/*.test.{ts,tsx}'] },
+  test: {
+    environment: 'jsdom',
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost:1420',
+      },
+    },
+    include: ['src/**/*.test.{ts,tsx}'],
+    setupFiles: ['./src/test/setup.ts'],
+  },
 });

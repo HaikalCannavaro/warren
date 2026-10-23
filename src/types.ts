@@ -9,9 +9,13 @@ export interface HermesProfile {
   transport?: 'openai' | 'gateway';
   agentProfile?: string;
 }
+export type CommandCategory = 'workspace' | 'session' | 'intel' | 'system';
+
 export interface SlashCommand {
   name: string; description: string; args?: string; available: boolean;
   reason?: string; allowWhileRunning?: boolean;
+  category?: CommandCategory;
+  aliases?: string[];
 }
 export interface CommandResult {
   id: string; command: string; content: string; createdAt: number;
@@ -30,6 +34,7 @@ export interface ExecutionLogEntry {
 }
 export interface Conversation {
   id: string; profileId: string; title: string; messages: Message[]; draft: string; createdAt: number;
+  model?: string;
   executionLog?: ExecutionLogEntry[];
   commandResults?: CommandResult[];
   gatewaySessionId?: string;

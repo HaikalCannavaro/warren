@@ -40,6 +40,7 @@ pub fn run() {
             ssh::ssh_resize,
             ssh::ssh_disconnect,
             hermes::probe_hermes,
+            hermes::hermes_http,
             hermes::chat_stream,
             gateway::gateway_connect,
             gateway::gateway_send,

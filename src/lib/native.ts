@@ -36,6 +36,32 @@ export async function disconnectSsh(sessionId:string):Promise<void> {
 export async function probeHermes(url:string,token:string):Promise<HermesCapabilities> {
   requireNative(); return invoke('probe_hermes',{url,token});
 }
+export async function hermesHttp(url:string,token:string,path:string,method:'GET'|'POST'='GET',body?:string):Promise<string> {
+  if (nativeAvailable()) {
+    return invoke('hermes_http',{url,token,endpointPath:path,method,body});
+  }
+  const cleanBase = url.replace(/\/+$/, '');
+  let fullUrl: string;
+  if (path.startsWith('/')) {
+    if (path === '/health') {
+      fullUrl = `${cleanBase.replace(/\/v1$/, '')}/health`;
+    } else {
+      fullUrl = `${cleanBase.endsWith('/v1') ? cleanBase : `${cleanBase}/v1`}${path.replace(/^\/v1/, '')}`;
+    }
+  } else {
+    fullUrl = `${cleanBase}/${path}`;
+  }
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (body) headers['Content-Type'] = 'application/json';
+  const response = await fetch(fullUrl, { method, headers, body });
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new Error(translate("Hermes rejected the API credentials. Check the token and profile URL.", "Hermes menolak kredensial API. Periksa token dan URL profil."));
+    if (response.status === 404) throw new Error(translate("The Hermes endpoint was not found. Check the API base URL and server configuration.", "Endpoint Hermes tidak ditemukan. Periksa base URL dan konfigurasi server."));
+    throw new Error(`Hermes returned HTTP ${response.status}.`);
+  }
+  return response.text();
+}
 export async function streamHermes(request:HermesRequest,handler:(event:HermesEvent)=>void):Promise<void> {
   requireNative(); const onEvent=new Channel<HermesEvent>(); onEvent.onmessage=handler;
   return invoke('chat_stream',{request,onEvent});
