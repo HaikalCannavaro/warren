@@ -71,3 +71,8 @@ export interface TerminalSession {
   id: string; profileId: string; label: string; host: string;
   status: 'connecting' | 'connected' | 'disconnected' | 'error'; error?: string;
 }
+export interface BiometricStatus {
+  available: boolean;
+  enrolled: boolean;
+  enabled: boolean;
+}

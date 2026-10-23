@@ -16,6 +16,7 @@ const f=vi.hoisted(()=>({
   gatewayConnect:vi.fn(),gatewaySession:vi.fn(),gatewayCatalog:vi.fn(),gatewayCommand:vi.fn(),gatewaySend:vi.fn(),gatewayClose:vi.fn(),
   gatewayProfile:vi.fn(),gatewayObservers:[] as ((sessionId:string,profile:string|undefined)=>void)[],
   gatewayClosed:false,
+  biometricStatus:vi.fn(),enrollBiometric:vi.fn(),unlockWithBiometric:vi.fn(),clearBiometric:vi.fn(),
 }));
 vi.mock('../lib/gatewayClient',()=>({GatewayClient:class {
   constructor(_profile:unknown,onProfile?:(sessionId:string,profile:string|undefined)=>void){f.gatewayClosed=false;if(onProfile)f.gatewayObservers.push(onProfile);}
@@ -29,6 +30,7 @@ vi.mock('../lib/native',()=>({
   writeSsh:f.writeSsh,resizeSsh:f.resizeSsh,streamHermes:f.stream,probeHermes:vi.fn(),
   hermesHttp:f.hermesHttp,
   onDesktopClose:f.onDesktopClose,destroyWindow:f.destroyWindow,
+  getBiometricStatus:f.biometricStatus,enrollBiometric:f.enrollBiometric,unlockWithBiometric:f.unlockWithBiometric,clearBiometric:f.clearBiometric,
 }));
 const profile:VpsProfile={id:'vps-1',name:'My VPS',host:'example.test',port:22,username:'deploy',auth:'password',password:'secret',privateKey:'',passphrase:''};
 beforeEach(()=>{
@@ -48,6 +50,8 @@ beforeEach(()=>{
   f.gatewayConnect.mockResolvedValue(undefined);f.gatewaySession.mockResolvedValue({sessionId:'canonical-1'});
   f.gatewayCatalog.mockResolvedValue(basicSlashCommands().map(c=>({...c,available:true,reason:undefined})));
   f.gatewayCommand.mockResolvedValue('Model diperbarui.');f.gatewayClose.mockResolvedValue(undefined);
+  f.biometricStatus.mockResolvedValue({available:false,enrolled:false,enabled:false});
+  f.enrollBiometric.mockResolvedValue(true);f.clearBiometric.mockResolvedValue(false);
   f.gatewaySend.mockImplementation(async(_id:string,_text:string,_submission:string,onEvent:(e:HermesEvent)=>void)=>{onEvent({type:'delta',text:'draft'});onEvent({type:'replace',text:'Final response'});onEvent({type:'done',finishReason:'stop'});});
 });
 afterEach(()=>cleanup());
@@ -1041,5 +1045,54 @@ describe('Extended slash commands suite', () => {
     const conv = h.result.current.state.conversations[0];
     expect(conv.commandResults?.at(-1)?.status).toBe('complete');
     expect(conv.draft).toContain('```terminal\nline 1\nline 2\nline 3\n```');
+  });
+
+  it('enrolls, unlocks, handles cancel/error, and disables biometric unlock', async () => {
+    f.biometricStatus.mockResolvedValue({ available: true, enrolled: true, enabled: false });
+    const h = renderHook(() => useWorkspace());
+    await act(async () => {});
+    expect(h.result.current.biometric).toEqual({ available: true, enrolled: true, enabled: false });
+
+    f.biometricStatus.mockResolvedValue({ available: true, enrolled: true, enabled: true });
+    await act(async () => {
+      await h.result.current.unlock('a long password', { enableBiometric: true });
+    });
+    expect(f.enrollBiometric).toHaveBeenCalledWith('a long password');
+    expect(h.result.current.biometric.enabled).toBe(true);
+    expect(h.result.current.ready).toBe(true);
+
+    // Lock vault and test user cancel vs biometric unlock
+    await act(async () => {
+      await h.result.current.lock();
+    });
+    expect(h.result.current.ready).toBe(false);
+    expect(h.result.current.autoPromptBiometric).toBe(false);
+
+    f.unlockWithBiometric.mockRejectedValueOnce(new Error('Use password'));
+    await act(async () => {
+      await h.result.current.unlockBiometric();
+    });
+    expect(h.result.current.ready).toBe(false);
+    expect(h.result.current.error).toBeNull();
+
+    f.unlockWithBiometric.mockRejectedValueOnce(new Error('Biometric key expired. Unlock once with your master password.'));
+    await act(async () => {
+      await h.result.current.unlockBiometric();
+    });
+    expect(h.result.current.ready).toBe(false);
+    expect(h.result.current.error).toContain('Biometric key expired');
+
+    f.unlockWithBiometric.mockResolvedValueOnce('a long password');
+    await act(async () => {
+      await h.result.current.unlockBiometric();
+    });
+    expect(h.result.current.ready).toBe(true);
+
+    f.biometricStatus.mockResolvedValue({ available: true, enrolled: true, enabled: false });
+    await act(async () => {
+      await h.result.current.disableBiometric();
+    });
+    expect(f.clearBiometric).toHaveBeenCalledOnce();
+    expect(h.result.current.biometric.enabled).toBe(false);
   });
 });

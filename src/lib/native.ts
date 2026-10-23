@@ -1,7 +1,7 @@
 import { translate } from './i18n';
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { HermesCapabilities, HermesEvent, HermesRequest, SshEvent, SshRequest } from '../types';
+import type { BiometricStatus, HermesCapabilities, HermesEvent, HermesRequest, SshEvent, SshRequest } from '../types';
 
 export const nativeAvailable = () => isTauri();
 export async function onDesktopClose(handler:()=>Promise<void>):Promise<()=>void> {
@@ -77,4 +77,29 @@ export async function sendGateway(connectionId:string,text:string):Promise<void>
 }
 export async function disconnectGateway(connectionId:string):Promise<void> {
   requireNative(); return invoke('gateway_disconnect',{connectionId});
+}
+
+export async function getBiometricStatus():Promise<BiometricStatus> {
+  if (!nativeAvailable()) return { available: false, enrolled: false, enabled: false };
+  try {
+    return await invoke<BiometricStatus>('biometric_status');
+  } catch {
+    return { available: false, enrolled: false, enabled: false };
+  }
+}
+export async function enrollBiometric(password:string):Promise<boolean> {
+  requireNative();
+  return invoke<boolean>('biometric_enroll',{password});
+}
+export async function unlockWithBiometric(labels?:{title?:string;subtitle?:string;cancelText?:string}):Promise<string> {
+  requireNative();
+  return invoke<string>('biometric_unlock',{
+    title: labels?.title ?? translate("Unlock Warren", "Buka Warren"),
+    subtitle: labels?.subtitle ?? translate("Verify your fingerprint to open your workspace", "Verifikasi sidik jari untuk membuka ruang kerja"),
+    cancelText: labels?.cancelText ?? translate("Use password", "Gunakan password"),
+  });
+}
+export async function clearBiometric():Promise<boolean> {
+  if (!nativeAvailable()) return false;
+  return invoke<boolean>('biometric_clear');
 }

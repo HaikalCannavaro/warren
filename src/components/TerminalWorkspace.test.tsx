@@ -4,10 +4,15 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { TerminalWorkspace } from './TerminalWorkspace';
 import { setLanguage } from '../lib/i18n';
 
-const terminals = vi.hoisted(() => [] as { write: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }[]);
+const terminals = vi.hoisted(() => [] as {
+  cols: number; rows: number;
+  write: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn>; resize: ReturnType<typeof vi.fn>;
+  _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } };
+}[]);
+const fitCalls = vi.hoisted(() => ({ count: 0 }));
 vi.mock('@xterm/xterm', () => ({ Terminal: class {
   options = {}; cols = 80; rows = 24;
-  write = vi.fn(); dispose = vi.fn(); focus = vi.fn();
+  write = vi.fn(); dispose = vi.fn(); focus = vi.fn(); resize = vi.fn((cols: number, rows: number) => { this.cols = cols; this.rows = rows; });
   onDataCallback: (text: string) => void = () => {};
   constructor() { terminals.push(this); }
   loadAddon() {}
@@ -15,11 +20,12 @@ vi.mock('@xterm/xterm', () => ({ Terminal: class {
   onData(callback: (text: string) => void) { this.onDataCallback = callback; return { dispose: vi.fn() }; }
   onResize() { return { dispose: vi.fn() }; }
 } }));
-vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() {} } }));
+vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() { fitCalls.count++; } } }));
 
 beforeEach(() => {
   setLanguage('id');
   terminals.length = 0;
+  fitCalls.count = 0;
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -104,5 +110,32 @@ describe('terminal paste safety and lifetime', () => {
     view.rerender(<TerminalWorkspace {...props} visible sessions={[]}/>);
     expect(terminals[0].dispose).toHaveBeenCalledOnce();
     expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('wraps xterm-container in xterm-shell and clamps rows/cols on visualViewport resize', () => {
+    const viewportListeners: Record<string, (() => void)[]> = {};
+    vi.stubGlobal('visualViewport', {
+      addEventListener: vi.fn((type: string, cb: () => void) => {
+        viewportListeners[type] = viewportListeners[type] ?? [];
+        viewportListeners[type].push(cb);
+      }),
+      removeEventListener: vi.fn(),
+    });
+    const { view } = setup();
+    const container = view.container.querySelector('.xterm-container') as HTMLElement;
+    expect(container).toBeTruthy();
+    expect(container.parentElement?.classList.contains('xterm-shell')).toBe(true);
+
+    Object.defineProperty(container, 'clientWidth', { value: 320, configurable: true });
+    Object.defineProperty(container, 'clientHeight', { value: 200, configurable: true });
+    terminals[0].cols = 80;
+    terminals[0].rows = 24;
+    terminals[0]._core = { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } };
+
+    act(() => {
+      for (const listener of viewportListeners.resize ?? []) listener();
+    });
+    expect(fitCalls.count).toBeGreaterThan(0);
+    expect(terminals[0].resize).toHaveBeenCalledWith(39, 12);
   });
 });

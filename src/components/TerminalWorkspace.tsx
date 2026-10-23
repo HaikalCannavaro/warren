@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ClipboardPaste, Command, CornerDownLeft, Plus, Server, ShieldCheck, TerminalSquare, X } from 'lucide-react';
@@ -50,6 +50,30 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
   latest.current = { subscribeTerminal, writeTerminal, resizeTerminal, status: session.status };
   const [paste, setPaste] = useState<string | null>(null);
   const [error, setError] = useState('');
+
+  const fitTerminal = useCallback(() => {
+    const element = container.current;
+    const term = terminal.current;
+    const fitAddon = fit.current;
+    if (!element || !term || !fitAddon) return;
+    if (element.clientWidth <= 0 || element.clientHeight <= 0) return;
+    fitAddon.fit();
+    const cell = (term as unknown as {
+      _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } };
+    })._core?._renderService?.dimensions?.css?.cell;
+    if (cell && cell.width && cell.width > 0 && cell.height && cell.height > 0) {
+      const maxCols = Math.max(2, Math.floor((element.clientWidth - 2) / cell.width));
+      const maxRows = Math.max(1, Math.floor((element.clientHeight - 2) / cell.height));
+      if (term.cols > maxCols || term.rows > maxRows) {
+        term.resize?.(Math.min(term.cols, maxCols), Math.min(term.rows, maxRows));
+      }
+    }
+    const activeBuffer = (term as unknown as { buffer?: { active?: { baseY: number; viewportY: number } } }).buffer?.active;
+    if (activeBuffer && activeBuffer.baseY - activeBuffer.viewportY <= 2) {
+      (term as unknown as { scrollToBottom?: () => void }).scrollToBottom?.();
+    }
+  }, []);
+
   useEffect(() => {
     const element = container.current;
     if (!element) return;
@@ -63,22 +87,36 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
     const incoming = latest.current.subscribeTerminal(session.id, (bytes) => term.write(bytes));
     const outgoing = term.onData((data) => { if (latest.current.status === 'connected') void latest.current.writeTerminal(session.id, data).catch((cause) => setError(String(cause))); });
     const resize = term.onResize(({ cols, rows }) => { if (latest.current.status === 'connected') void latest.current.resizeTerminal(session.id, cols, rows).catch((cause) => setError(String(cause))); });
-    const resizeObserver = new ResizeObserver(() => { if (element.clientWidth > 0 && element.clientHeight > 0) fitAddon.fit(); });
+    const resizeObserver = new ResizeObserver(() => { fitTerminal(); });
     resizeObserver.observe(element);
+    const handleViewportResize = () => { fitTerminal(); };
+    const viewport = typeof window !== 'undefined' ? window.visualViewport : null;
+    viewport?.addEventListener('resize', handleViewportResize);
     const interceptPaste = (event: ClipboardEvent) => { event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); const value = event.clipboardData?.getData('text/plain'); if (value) setPaste(value); };
     element.addEventListener('paste', interceptPaste, true);
-    return () => { unregisterTerminal(); incoming(); outgoing.dispose(); resize.dispose(); resizeObserver.disconnect(); element.removeEventListener('paste', interceptPaste, true); term.dispose(); terminal.current = null; fit.current = null; };
+    return () => {
+      unregisterTerminal();
+      incoming();
+      outgoing.dispose();
+      resize.dispose();
+      resizeObserver.disconnect();
+      viewport?.removeEventListener('resize', handleViewportResize);
+      element.removeEventListener('paste', interceptPaste, true);
+      term.dispose();
+      terminal.current = null;
+      fit.current = null;
+    };
     // A terminal lives for its session, including while hidden. Callback refs avoid resetting its buffer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id]);
-  useEffect(() => { if (terminal.current) { terminal.current.options.fontSize = settings.fontSize; terminal.current.options.scrollback = settings.scrollback; } if (visible && container.current?.clientWidth) fit.current?.fit(); }, [settings.fontSize, settings.scrollback, visible]);
-  useEffect(() => { if (!visible) return; const frame = requestAnimationFrame(() => { if (container.current?.clientWidth) { fit.current?.fit(); terminal.current?.focus(); if (session.status === 'connected' && terminal.current) void latest.current.resizeTerminal(session.id, terminal.current.cols, terminal.current.rows).catch((cause) => setError(String(cause))); } }); return () => cancelAnimationFrame(frame); }, [visible, session.status, session.id]);
+  useEffect(() => { if (terminal.current) { terminal.current.options.fontSize = settings.fontSize; terminal.current.options.scrollback = settings.scrollback; } if (visible && container.current?.clientWidth) fitTerminal(); }, [settings.fontSize, settings.scrollback, visible, fitTerminal]);
+  useEffect(() => { if (!visible) return; const frame = requestAnimationFrame(() => { if (container.current?.clientWidth) { fitTerminal(); terminal.current?.focus(); if (session.status === 'connected' && terminal.current) void latest.current.resizeTerminal(session.id, terminal.current.cols, terminal.current.rows).catch((cause) => setError(String(cause))); } }); return () => cancelAnimationFrame(frame); }, [visible, session.status, session.id, fitTerminal]);
   const sendKey = (data: string) => { if (session.status === 'connected') void writeTerminal(session.id, data).catch((cause) => setError(String(cause))); terminal.current?.focus(); };
   return <div id={`session-panel-${session.id}`} role="tabpanel" aria-labelledby={`session-tab-${session.id}`} className="terminal-pane" style={{ display: selected ? 'flex' : 'none' }}>
     <div className="session-info"><span className={`status-dot ${session.status}`}/><span>{statusLabels[session.status]}</span><span className="session-host">{session.host}</span></div>
     {session.error && <p className="terminal-error" role="alert">{session.error}</p>}
     {error && <div className="terminal-error" role="alert">{error}<button className="icon-button" aria-label={t("Dismiss error", "Tutup pesan kesalahan")} onClick={() => setError('')}><X size={14}/></button></div>}
-    <div className="xterm-container" ref={container} aria-label={`Terminal ${session.label}`}/>
+    <div className="xterm-shell"><div className="xterm-container" ref={container} aria-label={`Terminal ${session.label}`}/></div>
     <div className="terminal-keybar" aria-label={t("Terminal shortcuts", "Tombol pintasan terminal")}>
       <button disabled={session.status !== 'connected'} onClick={() => sendKey('\x03')}>Ctrl C</button><button disabled={session.status !== 'connected'} onClick={() => sendKey('\x1b')}>Esc</button><button disabled={session.status !== 'connected'} onClick={() => sendKey('\t')}>Tab</button>
       <span className="keybar-divider"/>

@@ -1,6 +1,6 @@
 import { getLocale, translate } from '../lib/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CommandResult, Conversation, ExecutionLogEntry, HermesEvent, HermesProfile, Message, SavedState, Settings, SlashCommand, TerminalSession, VpsProfile } from '../types';
+import type { BiometricStatus, CommandResult, Conversation, ExecutionLogEntry, HermesEvent, HermesProfile, Message, SavedState, Settings, SlashCommand, TerminalSession, VpsProfile } from '../types';
 import { conversationHistory, emptyState, errorText, normalizeAgentProfileName, normalizeGatewayUrl, normalizeHermesUrl, validateVps } from '../lib/domain';
 import { appendExecutionLog, interruptExecutionLog, MAX_LOG_TEXT } from '../lib/executionLog';
 import { basicSlashCommands, extendedSlashCommands, formatCommandHelp, parseSlashCommand, sanitizeCommandResults } from '../lib/slashCommands';
@@ -20,6 +20,8 @@ export function useWorkspace() {
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string|null>(null);
   const [saveError,setSaveError]=useState<string|null>(null);
+  const [biometric,setBiometric]=useState<BiometricStatus>({available:false,enrolled:false,enabled:false});
+  const [autoPromptBiometric,setAutoPromptBiometric]=useState(true);
   const [state,setState]=useState<SavedState>(emptyState);
   const stateRef=useRef(state);
   const vault=useRef<WorkspaceVault|null>(null);
@@ -117,16 +119,59 @@ export function useWorkspace() {
     return ()=>{ document.removeEventListener('visibilitychange',flush); if(saveTimer.current) clearTimeout(saveTimer.current); };
   },[persist]);
 
-  const unlock=async(password:string)=>{
+  const refreshBiometric=useCallback(async()=>{
+    if(preview||typeof native.getBiometricStatus!=='function')return;
+    try{
+      const status=await native.getBiometricStatus();
+      if(status)setBiometric(status);
+    }catch{}
+  },[preview]);
+
+  useEffect(()=>{void refreshBiometric();},[refreshBiometric]);
+
+  const unlock=async(password:string,options?:{enableBiometric?:boolean})=>{
     if(transition.current) return; transition.current='unlocking';transitionVersion.current++;setBusy(true); setError(null);
     try {
       const opened=await WorkspaceVault.open(password);vault.current=opened.vault;
+      if(options?.enableBiometric && typeof native.enrollBiometric==='function'){
+        try{await native.enrollBiometric(password);}catch{}
+      }
+      await refreshBiometric();
       const chats=opened.state.conversations.filter(c=>opened.state.hermes.some(p=>p.id===c.profileId));
       const selected=chats.find(c=>c.id===opened.state.activeConversationId)??[...chats].sort((a,b)=>b.createdAt-a.createdAt)[0];
       const restored={...opened.state,activeConversationId:selected?.id};
-      stateRef.current=restored;setState(restored);setActiveConversationId(selected?.id??null);setReady(true);
+      stateRef.current=restored;setState(restored);setActiveConversationId(selected?.id??null);setAutoPromptBiometric(false);setReady(true);
     }
     catch(e){setError(errorText(e));} finally {transition.current=null;setBusy(false);}
+  };
+
+  const unlockBiometric=async()=>{
+    if(transition.current||preview||typeof native.unlockWithBiometric!=='function')return;
+    setAutoPromptBiometric(false);setBusy(true);setError(null);
+    let password='';
+    try{
+      password=await native.unlockWithBiometric({
+        title:translate("Unlock Warren", "Buka Warren"),
+        subtitle:translate("Verify your fingerprint to open your workspace", "Verifikasi sidik jari untuk membuka ruang kerja"),
+        cancelText:translate("Use password", "Gunakan password"),
+      });
+    }catch(e){
+      setBusy(false);
+      await refreshBiometric();
+      const msg=errorText(e);
+      if(msg&&!/cancel|use password|gunakan password|batal/i.test(msg))setError(msg);
+      return;
+    }
+    setBusy(false);
+    if(password)await unlock(password);
+  };
+
+  const disableBiometric=async()=>{
+    if(preview||typeof native.clearBiometric!=='function')return;
+    try{
+      await native.clearBiometric();
+      await refreshBiometric();
+    }catch(e){setError(errorText(e));}
   };
 
   const updateSession=useCallback((id:string,patch:Partial<TerminalSession>)=>{
@@ -153,8 +198,9 @@ export function useWorkspace() {
       for(const id of liveSessions.current.keys()) await native.disconnectSsh(id);
       await persist(); await closeGateways(); await vault.current?.close(); vault.current=null;
       liveSessions.current.clear(); buffers.current.clear(); setSessions([]); setActiveSessionId(null); setActiveConversationId(null); setHostPrompt(null);
-      const blank=emptyState();stateRef.current=blank;setState(blank);setReady(false);
+      const blank=emptyState();stateRef.current=blank;setState(blank);setAutoPromptBiometric(false);setReady(false);
       setCommandCatalog({});setCommandBusyIds(new Set());setCommandsLoadingIds(new Set());
+      void refreshBiometric();
     } catch(e){setError(errorText(e));} finally {transition.current=null;setBusy(false);}
   };
 
@@ -609,7 +655,7 @@ export function useWorkspace() {
   const sendMessage=async(id:string)=>dispatchUserMessage(id);
 
   return {
-    ready,preview,busy,error,saveError,state,unlock,lock,runUpdateInstallation,clearError:()=>setError(null),
+    ready,preview,busy,error,saveError,state,unlock,lock,biometric,autoPromptBiometric,unlockBiometric,disableBiometric,runUpdateInstallation,clearError:()=>setError(null),
     saveVps,deleteVps,saveHermes,deleteHermes,
     updateSettings:(settings:Settings)=>commit(s=>({...s,settings:{fontSize:Math.min(24,Math.max(10,settings.fontSize)),scrollback:Math.min(20000,Math.max(1000,settings.scrollback))}})),
     sessions,activeSessionId,setActiveSessionId,connectVps,closeSession,hostPrompt,acceptHost,rejectHost:()=>setHostPrompt(null),

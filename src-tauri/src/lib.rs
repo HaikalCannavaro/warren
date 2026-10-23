@@ -1,3 +1,4 @@
+mod biometric;
 mod hermes;
 mod gateway;
 mod ssh;
@@ -50,6 +51,10 @@ pub fn run() {
             updater::check_for_update,
             updater::download_update,
             updater::install_update,
+            biometric::biometric_status,
+            biometric::biometric_enroll,
+            biometric::biometric_unlock,
+            biometric::biometric_clear,
         ])
         .run(tauri::generate_context!())
         .expect("Warren could not start");
