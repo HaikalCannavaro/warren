@@ -223,7 +223,7 @@ async fn await_acceptance(channel: &mut SshChannel, events: &Channel<SshEvent>, 
     }
 }
 
-async fn authenticate_request(request: &mut SshRequest) -> Result<SshHandle, String> {
+async fn establish(mut request: SshRequest, events: &Channel<SshEvent>) -> Result<(SshHandle, SshChannel), String> {
     let observed = Arc::new(Mutex::new(None));
     let verifier = HostVerifier { expected: Some(request.fingerprint.clone()), observed: observed.clone() };
     let connection = timeout(CONNECT_TIMEOUT, open_connection(&request.host, request.port, verifier))
@@ -260,11 +260,6 @@ async fn authenticate_request(request: &mut SshRequest) -> Result<SshHandle, Str
         }
     };
     if !authenticated { return Err("SSH authentication was rejected. Check the account and credential.".into()); }
-    Ok(handle)
-}
-
-async fn establish(mut request: SshRequest, events: &Channel<SshEvent>) -> Result<(SshHandle, SshChannel), String> {
-    let handle = authenticate_request(&mut request).await?;
     let mut channel = handle.channel_open_session().await.map_err(|e| format!("Could not open SSH session: {e}"))?;
     channel.request_pty(true, "xterm-256color", request.cols, request.rows, 0, 0, &[]).await
         .map_err(|e| format!("Could not request terminal: {e}"))?;
@@ -272,53 +267,6 @@ async fn establish(mut request: SshRequest, events: &Channel<SshEvent>) -> Resul
     channel.request_shell(true).await.map_err(|e| format!("Could not request shell: {e}"))?;
     await_acceptance(&mut channel, events, "shell").await?;
     Ok((handle, channel))
-}
-
-const GPU_QUERY: &str = "nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits";
-const MAX_GPU_OUTPUT: usize = 32 * 1024;
-
-async fn query_gpu(mut request: SshRequest) -> Result<String, String> {
-    let handle = authenticate_request(&mut request).await?;
-    let mut channel = handle.channel_open_session().await.map_err(|_| "Could not open GPU telemetry channel.")?;
-    channel.exec(true, GPU_QUERY).await.map_err(|_| "Could not request GPU telemetry.")?;
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    let mut exit_code = None;
-    loop {
-        match channel.wait().await {
-            Some(ChannelMsg::Data { data }) => stdout.extend_from_slice(&data),
-            Some(ChannelMsg::ExtendedData { data, .. }) => stderr.extend_from_slice(&data),
-            Some(ChannelMsg::ExitStatus { exit_status }) => exit_code = Some(exit_status),
-            Some(ChannelMsg::Failure) => return Err("SSH server refused GPU telemetry execution.".into()),
-            Some(ChannelMsg::Close) | None => break,
-            _ => {}
-        }
-        if stdout.len() + stderr.len() > MAX_GPU_OUTPUT { return Err("GPU telemetry output exceeded 32 KiB.".into()); }
-    }
-    let _ = timeout(Duration::from_secs(2), handle.disconnect(Disconnect::ByApplication, "GPU query complete", "en")).await;
-    if exit_code != Some(0) { return Err("nvidia-smi did not complete successfully. Check NVIDIA driver and SSH command access.".into()); }
-    String::from_utf8(stdout).map_err(|_| "GPU telemetry was not valid UTF-8.".into())
-}
-
-#[tauri::command]
-pub async fn ssh_gpu_snapshot(request: SshRequest, state: State<'_, SshState>) -> Result<String, String> {
-    validate_request(&request)?;
-    let session_id = request.session_id.clone();
-    let (tx, _rx) = mpsc::channel(1);
-    let (cancel, mut cancel_rx) = watch::channel(false);
-    {
-        let mut sessions = state.sessions.lock().map_err(|_| "SSH state unavailable.")?;
-        if sessions.contains_key(&session_id) { return Err("GPU telemetry query is already running.".into()); }
-        if sessions.len() >= MAX_SESSIONS { return Err("SSH session limit reached.".into()); }
-        sessions.insert(session_id.clone(), SessionControl { tx, cancel, ready: Arc::new(AtomicBool::new(false)) });
-    }
-    let result = tokio::select! {
-        biased;
-        _ = cancel_rx.changed() => Err("GPU telemetry query cancelled.".into()),
-        result = timeout(SETUP_TIMEOUT, query_gpu(request)) => result.unwrap_or_else(|_| Err("GPU telemetry query timed out.".into())),
-    };
-    if let Ok(mut sessions) = state.sessions.lock() { sessions.remove(&session_id); }
-    result
 }
 
 #[tauri::command]
@@ -446,66 +394,6 @@ pub async fn ssh_disconnect(session_id: String, state: State<'_, SshState>) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    struct GpuTestServer {
-        commands: Arc<Mutex<Vec<String>>>,
-        authentications: Arc<std::sync::atomic::AtomicUsize>,
-        exit_status: u32,
-    }
-    impl russh::server::Handler for GpuTestServer {
-        type Error = russh::Error;
-        async fn auth_password(&mut self, user: &str, password: &str) -> Result<russh::server::Auth, Self::Error> {
-            self.authentications.fetch_add(1, Ordering::SeqCst);
-            assert_eq!(user, "operator");
-            assert_eq!(password, "fixture-password");
-            Ok(russh::server::Auth::Accept)
-        }
-        async fn channel_open_session(&mut self, _channel: russh::Channel<russh::server::Msg>, reply: russh::server::ChannelOpenHandle, _session: &mut russh::server::Session) -> Result<(), Self::Error> {
-            reply.accept().await;
-            Ok(())
-        }
-        async fn exec_request(&mut self, channel: russh::ChannelId, data: &[u8], session: &mut russh::server::Session) -> Result<(), Self::Error> {
-            self.commands.lock().unwrap().push(String::from_utf8(data.to_vec()).unwrap());
-            session.channel_success(channel)?;
-            session.data(channel, b"14, 8, 8192, 655, 48\n".to_vec())?;
-            session.exit_status_request(channel, self.exit_status)?;
-            session.eof(channel)?;
-            session.close(channel)?;
-            Ok(())
-        }
-    }
-    async fn gpu_fixture(exit_status: u32) -> (SshRequest, Arc<Mutex<Vec<String>>>, Arc<std::sync::atomic::AtomicUsize>, tokio::task::JoinHandle<()>) {
-        let key = russh::keys::PrivateKey::from(russh::keys::ssh_key::private::Ed25519Keypair::from_seed(&[7; 32]));
-        let fingerprint = key.public_key().fingerprint(HashAlg::Sha256).to_string();
-        let config = Arc::new(russh::server::Config { keys: vec![key], auth_rejection_time: Duration::ZERO, ..Default::default() });
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let commands = Arc::new(Mutex::new(Vec::new()));
-        let authentications = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let handler = GpuTestServer { commands: commands.clone(), authentications: authentications.clone(), exit_status };
-        let server = tokio::spawn(async move { let (socket, _) = listener.accept().await.unwrap(); if let Ok(running) = russh::server::run_stream(config, socket, handler).await { let _ = running.await; } });
-        (SshRequest { session_id: "gpu-fixture".into(), host: "127.0.0.1".into(), port, username: "operator".into(), auth: AuthMethod::Password, password: "fixture-password".into(), private_key: String::new(), passphrase: String::new(), fingerprint, cols: 80, rows: 24 }, commands, authentications, server)
-    }
-    #[tokio::test]
-    async fn gpu_query_executes_only_the_fixed_command_and_checks_exit_status() {
-        for exit_status in [0, 1] {
-            let (request, commands, authentications, server) = gpu_fixture(exit_status).await;
-            let result = timeout(Duration::from_secs(5), query_gpu(request)).await.unwrap();
-            assert_eq!(*commands.lock().unwrap(), vec![GPU_QUERY.to_string()]);
-            assert_eq!(authentications.load(Ordering::SeqCst), 1);
-            if exit_status == 0 { assert_eq!(result.unwrap(), "14, 8, 8192, 655, 48\n"); } else { assert!(result.is_err()); }
-            timeout(Duration::from_secs(3), server).await.unwrap().unwrap();
-        }
-    }
-    #[tokio::test]
-    async fn gpu_query_rejects_changed_host_keys_before_sending_any_credentials() {
-        let (mut request, commands, authentications, server) = gpu_fixture(0).await;
-        request.fingerprint = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".into();
-        assert!(timeout(Duration::from_secs(5), query_gpu(request)).await.unwrap().is_err());
-        assert!(commands.lock().unwrap().is_empty());
-        assert_eq!(authentications.load(Ordering::SeqCst), 0);
-        timeout(Duration::from_secs(3), server).await.unwrap().unwrap();
-    }
 
     #[test]
     fn dropping_connection_guard_closes_a_socket_retained_by_the_protocol_task() {

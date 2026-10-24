@@ -1,0 +1,160 @@
+================================================================================
+WARREN MOBILE — HERMES ORCHESTRATOR, A2A, GPU & BROWSER INTEGRATION SPEC
+Dokumentasi Endpoint, RPC, Event Stream, dan Sumber Data Aktual (VPS + PC)
+================================================================================
+
+Target Perangkat:
+- Node 1 (VPS Linux): Hcnnvr-studio (Ubuntu 22.04 Azure, Tailscale: 100.65.133.127)
+- Node 2 (Windows PC): haikalcannavaro (Windows 11, Tailscale: 100.91.205.20)
+
+--------------------------------------------------------------------------------
+1. MISSION DAG & KANBAN TASK LIFECYCLE
+--------------------------------------------------------------------------------
+Hermes mengelola status tugas, relasi parent/child DAG, dan lifecycle pekerja
+menggunakan Kanban Engine bawaan.
+
+A. Database SQLite On-Disk (Authoritative)
+   - Path File: /root/.hermes/kanban/kanban.db
+   - Tabel Utama:
+     * tasks: id, title, status, assignee, priority, created_at, updated_at
+     * task_links: parent_id, child_id (fondasi untuk merender struktur graf DAG)
+     * task_events: audit log transisi status append-only (WAL mode)
+     * mission_edges: relasi misi tingkat orkestrasi
+
+B. REST API Endpoints (FastAPI Plugin di Port 9119)
+   - Base URL: http://127.0.0.1:9119/api/plugins/kanban
+   - Endpoints Kunci:
+     * GET /board
+       Mengembalikan status seluruh kolom (todo, ready, running, blocked,
+       review, done), kartu aktif, dan relasi parent/child untuk visualisasi DAG.
+     * GET /orchestration
+       Mengembalikan status DAG misi besar yang dikelola oleh LEVERET.
+     * GET /workers/active
+       Menampilkan profil agen mana yang saat ini sedang aktif memegang task lock.
+     * GET /tasks/{task_id}
+       Rincian task spesifik, metadata handoff, komentar, dan lampiran.
+
+C. WebSocket Realtime Events
+   - URL: ws://127.0.0.1:9119/api/plugins/kanban/events
+   - Mekanisme: WebSocket men-tail tabel task_events secara real-time.
+   - Contoh Payload:
+     {
+       "event": "task_transition",
+       "task_id": "task-8f92a1",
+       "from_status": "ready",
+       "to_status": "running",
+       "assignee": "forge",
+       "mission_id": "mission-20261024-01",
+       "timestamp": 1792841200
+     }
+
+--------------------------------------------------------------------------------
+2. INTER-AGENT SWARM FEED (A2A ACTIVITY STREAM)
+--------------------------------------------------------------------------------
+Komunikasi antar-agen berjalan di atas Agent2Agent Protocol (A2A v1.0 standard
+Linux Foundation). Setiap profil agen memiliki proses gateway dan port listener
+A2A internal tersendiri.
+
+A. Port Listener A2A Tiap Profil (Localhost VPS)
+   - 9900 : Main
+   - 9901 : LEVERET (Chief of Staff & Master Orchestrator)
+   - 9902 : ATLAS (Infrastructure & SRE)
+   - 9904 : FORGE (Backend & APIs)
+   - 9905 : FRAME (Frontend & Tauri Client)
+   - 9906 : AURORA (Product Design & UX)
+   - 9907 : PRISM (Functional QA & Regression)
+   - 9908 : LENS (Rendered Visual QA)
+   - 9909 : SENTINEL (Defensive Security & Vault)
+   - 9910 : RADAR (Web Research & Intel)
+   - 9911 : QUANT (Quantitative Engine)
+
+B. Sumber Data Stream Realtime (The Chatter Log)
+   - File Log Audit: /root/.hermes/profiles/<profile>/a2a_audit.jsonl
+   - File Percakapan Lengkap: /root/.hermes/profiles/<profile>/a2a_conversations/<context_id>.jsonl
+   - Format Entri JSONL:
+     {
+       "ts": 1792839490.939,
+       "direction": "outbound",
+       "sender": "leveret",
+       "peer": "forge",
+       "task_id": "task-b24b5bc26c8d40ab",
+       "summary": "[LEVERET CONSULTATION: SOCKS5 ROUTING FOR RECLIP] ...",
+       "status": "completed"
+     }
+
+C. Konsumsi di Warren Mobile
+   - Agregator dapat disediakan melalui FastAPI Cockpit (port 3450)
+     via endpoint GET /api/v1/swarm/feed atau WebSocket tailer yang membaca
+     perubahan pada file-file .jsonl tersebut.
+
+--------------------------------------------------------------------------------
+3. STATISTIK GPU (WINDOWS WORKSTATION: haikalcannavaro)
+--------------------------------------------------------------------------------
+PC Windows terhubung dengan VPS melalui Tailscale Mesh Network pada IP 100.91.205.20.
+
+Opsi A (Recommended — Tanpa Backend Tambahan, Native Warren SSH):
+   - Warren sudah memiliki Rust SSH engine (libssh2) di src-tauri/src/ssh.rs.
+   - Buka sesi background SSH ke haikalcannavaro (100.91.205.20:22) dan jalankan:
+     nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits
+   - Output string: "14, 8, 8192, 655, 48"
+   - Di-parse langsung di React/TypeScript:
+     {
+       gpuUsage: 14,
+       vramUsage: 8,
+       vramTotal: 8192,
+       vramUsed: 655,
+       temperature: 48
+     }
+
+Opsi B (Python / PowerShell HTTP Bridge):
+   - Bridge berjalan di Windows pada port 8088 (Tailscale interface).
+   - Request: POST http://100.91.205.20:8088/
+     Body: {"cmd": "nvidia-smi ..."}
+   - Output dikembalikan sebagai respons HTTP JSON.
+
+--------------------------------------------------------------------------------
+4. LIVE BROWSER CAPTURE (SNAPSHOT 16:9)
+--------------------------------------------------------------------------------
+A. Di Linux VPS (Hcnnvr-studio)
+   - Headless Chrome berjalan permanen dengan remote debugging port:
+     http://127.0.0.1:9222
+   - Daemon browser_harness mengontrol tab browser.
+   - Snapshot diambil via CDP: Page.captureScreenshot (format: png/webp, 16:9).
+   - File tersimpan di:
+     /root/.hermes/profiles/<profile>/cache/scratch/screenshot_<id>.png
+
+B. Di Windows PC (haikalcannavaro)
+   - Playwright non-headless berjalan di layar monitor desktop.
+   - Cuplikan layar diekspor ke folder temporary Windows dan dapat di-stream
+     via Tailscale HTTP transfer.
+
+C. Integrasi ke Chat & Telemetry Warren
+   - Saat agen memanggil browser_exec, event WebSocket Gateway menyertakan
+     artifact payload:
+     {
+       "type": "tool_artifact",
+       "tool": "browser_exec",
+       "artifact_type": "image/png",
+       "data": "data:image/png;base64,iVBORw0KGgo..."
+     }
+   - Komponen UI merender image base64 ke dalam container 16:9 dengan tombol Zoom.
+
+--------------------------------------------------------------------------------
+5. REKOMENDASI TAHAPAN IMPLEMENTASI (FRONTEND ROADMAP)
+--------------------------------------------------------------------------------
+Fase 1 (Presentational UI & Layout):
+   - Selesaikan 5 tab mobile: Swarm, Agents, Nodes, Telemetry, Settings.
+   - Terapkan design system Industrial Dark (#0c131f base, #101a28 card, #6be2c4 teal).
+   - Siapkan mock state untuk A2A feed dan DAG progress card.
+
+Fase 2 (Chat & Telegram-Style Tool Execution):
+   - Hubungkan chat ke WebSocket Gateway (wss://.../api/ws).
+   - Render pemanggilan tool internal agen secara inline (icon, compact badge,
+     tap-to-expand JSON args & monospace stdout).
+   - Implementasikan grouping jika terdapat 3+ tool execution beruntun.
+
+Fase 3 (Telemetry, Hardware & Live Integration):
+   - Polling / WebSocket event Kanban port 9119 (/board dan /events).
+   - SSH query nvidia-smi ke 100.91.205.20 untuk hardware gauge Windows PC.
+   - Tampilkan preview snapshot 16:9 jika tool browser_exec aktif.
+================================================================================

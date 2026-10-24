@@ -1,5 +1,4 @@
 import { translate } from './i18n';
-import { parseToolArtifact } from './artifacts';
 import { normalizeAgentProfileName } from './domain';
 import type { HermesEvent, HermesProfile, SlashCommand } from '../types';
 import { connectGateway, disconnectGateway, sendGateway } from './native';
@@ -60,15 +59,9 @@ export class GatewayClient {
   private sequences = new Map<string, number>();
   private catalogs = new Map<string, SlashCommand[]>();
 
-  constructor(profile: HermesProfile, private readonly onSessionProfile?: (sessionId: string, profile: string | undefined) => void, private readonly onDisconnect?: () => void) { this.profile = { ...profile }; }
+  constructor(profile: HermesProfile, private readonly onSessionProfile?: (sessionId: string, profile: string | undefined) => void) { this.profile = { ...profile }; }
 
   isClosed(): boolean { return this.closed; }
-  /** Measures a real Gateway RPC round trip, after the capability handshake. */
-  async ping(): Promise<number> {
-    const start = performance.now();
-    await this.rpc('gateway.ping', {}, 15_000);
-    return Math.max(0, Math.round(performance.now() - start));
-  }
   getSessionProfile(sessionId: string): string | undefined { return normalizeAgentProfileName(this.sessions.get(sessionId)?.info.profile_name); }
 
   private notifySessionProfile(sessionId: string): void {
@@ -155,7 +148,6 @@ export class GatewayClient {
       void sendGateway(this.connectionId, JSON.stringify({ jsonrpc: '2.0', id: frame.id, error: { code: -32601, message: 'Warren belum mendukung permintaan interaktif ini. Gunakan klien Hermes yang mendukungnya.' } })).catch(() => {});
       return;
     }
-    if (frame.type === 'tool_artifact') { this.handleEvent({...frame,payload:frame}); return; }
     if (frame.method === 'event') { this.handleEvent(row(frame.params)); return; }
     if (typeof frame.id !== 'number') return;
     const pending = this.pending.get(frame.id);
@@ -208,22 +200,11 @@ export class GatewayClient {
       const generation = params.execution_generation ?? payload.execution_generation;
       if (integer(generation)) void this.rpc('session.interrupt', { session_id: turn.sessionId, execution_generation: generation }, RPC_TIMEOUT, true).catch(() => {});
       this.finish(turn, new GatewayError(translate("Hermes requested an approval or interactive answer that Warren does not support yet. A stop was requested; check the session in a compatible Hermes client.", "Hermes meminta persetujuan atau jawaban interaktif yang belum didukung Warren. Penghentian diminta; periksa sesi di klien Hermes."), true));
-    } else if (type === 'tool_artifact' || type === 'tool.artifact' || payload.type === 'tool_artifact') {
-      const artifact=parseToolArtifact(payload);
-      if(artifact)this.emit(turn,{type:'artifact',artifact});
     } else if (type === 'message.delta' && typeof payload.text === 'string') {
       this.emit(turn, { type: 'delta', text: payload.text });
     } else if (type === 'tool.start' || type === 'tool.complete' || type === 'tool.generating') {
       const label = str(payload.name) || 'tool';
-      let args: Row | undefined;
-      const rawArgs=payload.arguments??payload.args;
-      try { const parsed=typeof rawArgs==='string'?JSON.parse(rawArgs):rawArgs; if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed)) args=row(JSON.parse(this.safe(JSON.stringify(parsed)))); } catch { /* Missing or oversized arguments are not reconstructed. */ }
-      const output=typeof payload.output==='string'?this.safe(payload.output):payload.output&&typeof payload.output==='object'?this.safe(JSON.stringify(payload.output)):undefined;
-      const duration=typeof payload.duration_ms==='number'&&Number.isFinite(payload.duration_ms)&&payload.duration_ms>=0?`${(payload.duration_ms/1000).toFixed(1)}s`:'';
-      const id=str(payload.tool_call_id)||str(payload.call_id)||str(payload.id)||crypto.randomUUID();
-      const paramValue=args&&(args.command??args.pattern??args.path??args.url);
-      const param=typeof paramValue==='string'?JSON.stringify(paramValue):'';
-      this.emit(turn, { type: 'tool', text: this.safe(`${type === 'tool.complete' ? translate('Completed', 'Selesai') : translate('Running', 'Menjalankan')}: ${label}${str(payload.summary) ? ` — ${str(payload.summary)}` : ''}`), call:{id:this.safe(id),name:this.safe(label),param:this.safe(param),state:type==='tool.complete'?(payload.status==='error'||payload.is_error===true?'error':'done'):'running',duration,...(args?{args}:{}),...(output!==undefined?{output}:{})} });
+      this.emit(turn, { type: 'tool', text: this.safe(`${type === 'tool.complete' ? translate('Completed', 'Selesai') : translate('Running', 'Menjalankan')}: ${label}${str(payload.summary) ? ` — ${str(payload.summary)}` : ''}`) });
     } else if (type === 'message.complete') {
       if (typeof payload.text === 'string') this.emit(turn, { type: 'replace', text: payload.text });
       else if (typeof payload.content === 'string') this.emit(turn, { type: 'replace', text: payload.content });
@@ -244,7 +225,6 @@ export class GatewayClient {
   }
 
   private failConnection(error: GatewayError): void {
-    const wasClosed = this.closed;
     this.connected = false; this.closed = true;
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.ready?.reject(error);
@@ -255,7 +235,6 @@ export class GatewayClient {
       this.started = false;
       this.disconnecting = disconnectGateway(this.connectionId).catch(() => {});
     }
-    if (!wasClosed) { try { this.onDisconnect?.(); } catch { /* Display callbacks cannot interrupt transport cleanup. */ } }
   }
 
   private adopt(snapshot: Row): SessionState {

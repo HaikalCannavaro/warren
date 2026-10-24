@@ -1,11 +1,5 @@
 # Warren
 
-## Mission Control
-
-Antarmuka utama kini menjadi **Hermes Multi-Agent Mission Control** dengan tab Swarm, Agents, Nodes, Telemetry, dan Settings. Layout mobile memakai bottom navigation dan composer chat yang tetap terlihat. Kartu tool inline mendukung chain collapse, JSON arguments, output, dan copy.
-
-Aplikasi memakai state koneksi sebenarnya: jika belum ada perangkat/agen terhubung, tampil keterangan belum terhubung dan data kosong. Tidak ada aktivitas atau statistik contoh pada layar rilis. Node bernama **Hcnnvr-studio** dan **haikalcannavaro** dipilih melalui endpoint agen yang ditetapkan ke masing-masing node. UI memakai **React 19 + Tailwind CSS 4 + Lucide + TypeScript**, font Inter lokal, dan syntax highlighting. Profil, chat, SSH xterm, Stronghold, dan biometrik memakai workspace native yang sama. Kanban/A2A memakai endpoint yang dikonfigurasi di Settings; GPU dibaca melalui SSH, dan browser capture diterima dari artifact Gateway. Kredensial diisi dari aplikasi dan disimpan dalam vault native, bukan di-hardcode. Lihat [panduan koneksi live](docs/LIVE-CONNECTIONS.md) dan [panduan Mission Control](docs/MISSION-CONTROL.md).
-
 Aplikasi personal berbasis **Tauri 2 + React + TypeScript** untuk mengakses VPS melalui SSH dan berbicara dengan Hermes Agent. Terminal dan Hermes berada di bagian terpisah.
 
 Antarmuka memakai **English** secara default. Pilih **Settings → Language → English / Bahasa Indonesia** untuk mengganti bahasa; pilihan tersimpan di perangkat. Pengaturan ini tidak menerjemahkan isi chat, balasan Agent, atau output terminal.
@@ -14,7 +8,7 @@ Antarmuka memakai **English** secara default. Pilih **Settings → Language → 
 
 Sumber ikon vektor berada di `public/brand/`. Jalankan `npm run icons:generate` untuk menghasilkan ulang ikon Windows dan launcher Android, termasuk adaptive icon dan versi monokrom. `npm run android:init` menjalankan langkah ini otomatis setelah proyek Android dibuat; jika menjalankan inisialisasi langsung lewat Tauri, jalankan generator ikon sesudahnya. Nama proses build desktop adalah `warren.exe`.
 
-Source ini memuat UI dan transport native, dengan target Windows dan Android. Hasil tes frontend, pemeriksaan TypeScript, dan build terbaru tersedia dalam [catatan pengujian](docs/TESTING.md). Perubahan terbaru belum diuji melalui installer Windows/APK baru atau koneksi server langsung dalam pengerjaan ini. Source versi berikutnya adalah **0.3.0**; installer Windows dan APK Android dibangun oleh workflow rilis bertanda tangan.
+Source ini memuat UI dan transport native, dengan target Windows dan Android. Hasil tes frontend, pemeriksaan TypeScript, dan build terbaru tersedia dalam [catatan pengujian](docs/TESTING.md). Perubahan terbaru belum diuji melalui installer Windows/APK baru atau koneksi server langsung dalam pengerjaan ini. Nomor versi tetap 0.2.0 mengikuti baseline repository; naikkan saat menyiapkan rilis berikutnya.
 
 ## Fitur dalam source
 
@@ -33,7 +27,7 @@ Source ini memuat UI dan transport native, dengan target Windows dan Android. Ha
 
 Versi 0.2.0 menambahkan **Settings → App updates** (**Pengaturan → Pembaruan aplikasi**). Setelah build awal dengan sumber rilis dan public key milik Anda, pengguna bisa mengunduh pembaruan dari dalam Warren. Android tetap meminta konfirmasi pemasangan sistem. Instalasi ditahan selama sesi SSH atau permintaan Hermes aktif dan jika brankas gagal disimpan.
 
-Overlay rilis sudah menunjuk **HaikalCannavaro/warren** dan public key produksi yang digunakan v0.2.3. Di v0.3.0 panel update tersedia langsung di Settings Mission Control. Push tag versi menjalankan build kedua platform, verifikasi signature/hash aset yang diunggah, lalu publikasi stable/latest. Build harus memakai private key updater dan keystore Android yang sama dengan rilis sebelumnya. Lihat [panduan update dan rilis](docs/UPDATES.md).
+Repository dan kunci produksi belum diisi. Build biasa menampilkan sumber pembaruan belum dikonfigurasi; gunakan [panduan setup dan rilis update](docs/UPDATES.md) untuk menyiapkan keduanya. Source menyertakan alat konfigurasi, pengemasan manifest, dan pembuatan draft rilis. Belum ada rilis nyata yang diterbitkan atau dipasang melalui updater.
 
 ## Jalankan tampilan terlebih dahulu
 
@@ -46,7 +40,7 @@ npm run build
 npm run preview -- --port 1420
 ```
 
-Buka `http://127.0.0.1:1420`. Browser menampilkan antarmuka dengan state belum terhubung. Konfigurasi pada browser hanya berada di memori dan hilang saat reload. Pilihan bahasa disimpan terpisah di perangkat dan tetap berlaku setelah reload. SSH, chat nyata, dan penyimpanan terenkripsi berjalan di aplikasi Tauri.
+Buka `http://127.0.0.1:1420`. Browser hanya menampilkan demo UI: formulir bisa dijelajahi, data ruang kerja hanya berada di memori dan hilang saat reload. Pilihan bahasa disimpan terpisah di perangkat dan tetap berlaku setelah reload. SSH, chat nyata, dan penyimpanan terenkripsi berjalan di aplikasi Tauri.
 
 Untuk mengembangkan UI dengan perubahan langsung, gunakan `npm run dev`. Jika PowerShell memblokir `npm.ps1`, gunakan `npm.cmd` pada perintah yang sama. Jangan mematikan kebijakan keamanan sistem hanya untuk menjalankannya.
 

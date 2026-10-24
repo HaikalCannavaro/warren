@@ -2,14 +2,12 @@ export type Section = 'terminal' | 'hermes' | 'connections' | 'settings';
 export interface VpsProfile {
   id: string; name: string; host: string; port: number; username: string;
   auth: 'password' | 'key'; password: string; privateKey: string; passphrase: string;
-  fingerprint?: string; color?: string; executionNode?: 'vps' | 'pc';
+  fingerprint?: string; color?: string;
 }
 export interface HermesProfile {
   id: string; name: string; url: string; token: string; model: string;
   transport?: 'openai' | 'gateway';
   agentProfile?: string;
-  executionNode?: string;
-  category?: 'Core Fleet' | 'Security' | 'Companions';
 }
 export type CommandCategory = 'workspace' | 'session' | 'intel' | 'system';
 
@@ -23,15 +21,10 @@ export interface CommandResult {
   id: string; command: string; content: string; createdAt: number;
   status: 'pending' | 'complete' | 'error' | 'unknown';
 }
-export interface ToolExecution {
-  id: string; name: string; param: string;
-  state: 'running' | 'done' | 'error' | 'unknown'; duration: string;
-  args?: Record<string, unknown>; output?: string; group?: number;
-}
 export interface Message {
   id: string; role: 'user' | 'assistant'; content: string; createdAt: number;
   status: 'sent' | 'streaming' | 'complete' | 'error' | 'unknown';
-  requestId?: string; error?: string; tools?: ToolExecution[]; artifacts?: ToolArtifact[];
+  requestId?: string; error?: string;
   agentProfile?: string;
 }
 export interface ExecutionLogEntry {
@@ -49,16 +42,10 @@ export interface Conversation {
   agentProfile?: string;
 }
 export interface Settings { fontSize: number; scrollback: number; }
-export interface CockpitConfig {
-  enabled: boolean; kanbanUrl: string; kanbanToken: string; feedUrl: string; feedToken: string;
-  eventsUrl: string; feedEventsUrl: string; pollInterval: number;
-}
-export interface ToolArtifact { id: string; type: 'image/png' | 'image/jpeg' | 'image/webp'; data: string; tool: string; createdAt: number; }
 export interface SavedState {
   version: 1; deviceId: string; vps: VpsProfile[]; hermes: HermesProfile[];
   conversations: Conversation[]; settings: Settings;
   activeConversationId?: string;
-  cockpit?: CockpitConfig;
 }
 export interface SshRequest {
   sessionId: string; host: string; port: number; username: string;
@@ -71,8 +58,7 @@ export type SshEvent =
 export type HermesEvent = (
   | { type: 'delta'; text: string }
   | { type: 'replace'; text: string }
-  | { type: 'tool'; text: string; call?: ToolExecution }
-  | { type: 'artifact'; artifact: ToolArtifact }
+  | { type: 'tool'; text: string }
   | { type: 'done'; finishReason: string }
   | { type: 'error'; message: string; uncertain: boolean }
 ) & { agentProfile?: string };

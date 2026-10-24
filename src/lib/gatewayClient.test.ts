@@ -46,51 +46,6 @@ beforeEach(() => {
 afterEach(async () => { await client.close(); vi.clearAllTimers(); vi.useRealTimers(); vi.clearAllMocks(); });
 
 describe('Hermes v0.22.4 canonical gateway', () => {
-  it('attaches browser artifacts only to the matching admitted turn', async () => {
-    const data='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
-    await ready();handle=req=>{if(req.method!=='prompt.submit')return defaults(req);event('tool_artifact',{tool:'browser_exec',artifact_type:'image/png',data},{admission_id:'foreign',seq:1});event('tool_artifact',{tool:'browser_exec',artifact_type:'image/png',data},{admission_id:'a',seq:2});event('message.complete',{text:'Captured',status:'complete'},{admission_id:'a',seq:3});reply(req,{admission_id:'a',status:'started'});};
-    const received:HermesEvent[]=[];await client.send('session-1','Capture','submission',e=>received.push(e));const artifacts=received.filter(e=>e.type==='artifact');expect(artifacts).toHaveLength(1);expect(artifacts[0]).toMatchObject({type:'artifact',artifact:{tool:'browser_exec',type:'image/png',data}});
-  });
-  it('delivers structured tool metadata with real IDs, durations, and credential redaction', async () => {
-    await ready();
-    handle = req => {
-      if (req.method !== 'prompt.submit') return defaults(req);
-      event('tool.start', {tool_call_id:'call-1',name:'terminal',arguments:{command:'npm run test',token:'private-token'}},{admission_id:'a',seq:1});
-      event('tool.complete', {tool_call_id:'call-1',name:'terminal',output:'Tests passed; private-token',duration_ms:400},{admission_id:'a',seq:2});
-      event('message.complete',{text:'Finished',status:'complete'},{admission_id:'a',seq:3});
-      reply(req,{admission_id:'a',status:'started'});
-    };
-    const events:HermesEvent[]=[];await client.send('session-1','Run tests','submission',e=>events.push(e));
-    expect(events[0]).toMatchObject({type:'tool',call:{id:'call-1',name:'terminal',state:'running',args:{command:'npm run test',token:'[redacted]'}}});
-    expect(events[1]).toMatchObject({type:'tool',call:{id:'call-1',state:'done',duration:'0.4s',output:'Tests passed; [redacted]'}});
-    expect(JSON.stringify(events)).not.toContain('private-token');
-  });
-  it('keeps missing tool metadata unavailable and failed calls separate from successful calls', async () => {
-    await ready();handle=req=>{if(req.method!=='prompt.submit')return defaults(req);event('tool.complete',{name:'read_file',is_error:true},{admission_id:'a',seq:1});event('message.complete',{text:'Failed',status:'complete'},{admission_id:'a',seq:2});reply(req,{admission_id:'a',status:'started'});};
-    const events:HermesEvent[]=[];await client.send('session-1','Read','submission',e=>events.push(e));
-    expect(events[0]).toMatchObject({type:'tool',call:{name:'read_file',state:'error',duration:''}});
-    if(events[0].type==='tool'){expect(events[0].call?.args).toBeUndefined();expect(events[0].call?.output).toBeUndefined();}
-  });
-  it('notifies the UI immediately on transport loss, without duplicate disconnect notifications', async () => {
-    const disconnected = vi.fn();
-    client = new GatewayClient(profile, undefined, disconnected);
-    await client.connect();
-    expect(disconnected).not.toHaveBeenCalled();
-    listener({ type: 'closed', message: 'Socket disconnected' });
-    expect(disconnected).toHaveBeenCalledTimes(1);
-    await client.close();
-    expect(disconnected).toHaveBeenCalledTimes(1);
-  });
-  it('measures latency from a real ping RPC and rejects pings without a connection', async () => {
-    await expect(client.ping()).rejects.toBeInstanceOf(Error);
-    await client.connect();
-    const now = vi.spyOn(performance, 'now').mockReturnValueOnce(100).mockReturnValueOnce(114.4);
-    expect(await client.ping()).toBe(14);
-    expect(calls.at(-1)?.method).toBe('gateway.ping');
-    now.mockRestore();
-    await client.close();
-    await expect(client.ping()).rejects.toBeInstanceOf(Error);
-  });
   it('reads only confirmed profile_name and preserves the profile for each admitted reply',async()=>{
     const observer=vi.fn();client=new GatewayClient({...profile,agentProfile:'Configured fallback'},observer);
     handle=req=>req.method==='session.create'||req.method==='session.resume'?reply(req,snapshot({info:{desktop_protocol:'hermes-gateway-v1',profile_name:'Leveret',profile_id:'/private/profiles/Leveret',model:'brain-model'}})):defaults(req);

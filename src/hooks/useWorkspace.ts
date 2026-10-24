@@ -241,7 +241,7 @@ export function useWorkspace() {
     if(stateRef.current.conversations.some(c=>c.profileId===profile.id&&(activeRequests.current.has(c.id)||pendingCommands.current.has(c.id)||pendingCatalogs.current.has(c.id))))throw new Error(translate("Wait for the Agent to finish before changing this connection.", "Tunggu pekerjaan Agent selesai sebelum mengubah koneksi."));
     const url=profile.transport==='gateway'?normalizeGatewayUrl(profile.url):normalizeHermesUrl(profile.url);
     const old=stateRef.current.hermes.find(p=>p.id===profile.id);
-    const changed=!!old && (old.url!==url || (old.transport??'openai')!==(profile.transport??'openai') || old.executionNode!==profile.executionNode);
+    const changed=!!old && (old.url!==url || (old.transport??'openai')!==(profile.transport??'openai'));
     const clean={...profile,id:changed?crypto.randomUUID():profile.id,url,name:profile.name.trim(),model:profile.model.trim(),agentProfile:normalizeAgentProfileName(profile.agentProfile)};
     commit(s=>({...s,hermes:[...s.hermes.filter(p=>p.id!==clean.id),clean],conversations:old&&!changed&&old.token!==clean.token?s.conversations.map(c=>c.profileId===clean.id?{...c,agentProfile:undefined}:c):s.conversations}));
     if(old&&!changed)for(const c of stateRef.current.conversations.filter(c=>c.profileId===profile.id)){
@@ -603,7 +603,7 @@ export function useWorkspace() {
     if(c.gatewayStateUncertain||c.commandResults?.some(r=>r.status==='unknown'&&['model','compact'].includes(parseSlashCommand(r.command)?.name??''))){setError(translate("A session change has an unknown result. Check Hermes, then start a new conversation.", "Status perubahan sesi belum diketahui. Periksa Hermes lalu mulai percakapan baru."));return;}
     const text=rawDraft.startsWith('//')?rawDraft.slice(1):rawDraft;const requestId=crypto.randomUUID();const assistantId=crypto.randomUUID();
     activeRequestIds.current.set(id,requestId);
-    let receivedTerminal=false;let dispatched=false;let receivedResponse=false;let toolGroup=0;let previousWasTool=false;
+    let receivedTerminal=false;let dispatched=false;let receivedResponse=false;
     const user:Message={id:crypto.randomUUID(),role:'user',content:text,createdAt:Date.now(),status:'sent'};
     const assistant:Message={id:assistantId,role:'assistant',content:'',createdAt:Date.now(),status:'streaming',requestId,agentProfile:normalizeAgentProfileName(profile.transport==='gateway'?c.agentProfile??profile.agentProfile:profile.agentProfile)};
     activeRequests.current.add(id);setStreamingIds(new Set(activeRequests.current));
@@ -615,7 +615,6 @@ export function useWorkspace() {
     const finish=(status:'complete'|'error'|'unknown',message?:string)=>{
       if(receivedTerminal)return;
       receivedTerminal=true;
-      updateConversation(id,c=>({...c,messages:c.messages.map(m=>m.id===assistantId?{...m,tools:m.tools?.map(t=>t.state==='running'?{...t,state:'unknown' as const}:t)}:m)}));
       updateMessage({status,...(message?{error:message}:{})},undefined,{kind:status,text:message??translate("Hermes response complete.", "Respons Hermes selesai diterima.")});
     };
     try {
@@ -625,24 +624,12 @@ export function useWorkspace() {
         if(transition.current==='closing' || detachedRequests.current.has(id) || receivedTerminal)return;
         if('agentProfile' in event)updateMessage({agentProfile:normalizeAgentProfileName(event.agentProfile)??normalizeAgentProfileName(profile.agentProfile)});
         if(event.type==='delta') {
-          if(event.text && previousWasTool){toolGroup++;previousWasTool=false;}
           const firstResponse=!receivedResponse&&!!event.text;
           receivedResponse=receivedResponse||!!event.text;
           updateMessage({},event.text,firstResponse?{kind:'response',text:translate("Receiving Hermes response.", "Respons Hermes mulai diterima.")}:undefined);
         }
         else if(event.type==='replace')updateMessage({content:event.text});
-        else if(event.type==='artifact') {
-          updateConversation(id,c=>({...c,messages:c.messages.map(m=>m.id===assistantId?{...m,artifacts:[...(m.artifacts??[]).filter(a=>a.id!==event.artifact.id),event.artifact].slice(-2)}:m)}));
-        }
         else if(event.type==='tool') {
-          previousWasTool=true;
-          updateConversation(id,current=>({...current,messages:current.messages.map(m=>{
-            if(m.id!==assistantId)return m;
-            const call=event.call??{id:crypto.randomUUID(),name:'tool',param:event.text.slice(0,300),state:'unknown' as const,duration:''};
-            const prior=m.tools?.find(t=>t.id===call.id);
-            const tool={...prior,...call,param:call.param||prior?.param||'',duration:call.duration||prior?.duration||'',group:prior?.group??toolGroup};
-            return {...m,tools:(prior?(m.tools??[]).map(t=>t.id===call.id?tool:t):[...(m.tools??[]),tool]).slice(-64)};
-          })}));
           setToolActivity(s=>({...s,[id]:event.text.slice(0,MAX_LOG_TEXT)}));
           updateConversation(id,current=>({...current,executionLog:appendExecutionLog(current.executionLog,requestId,'tool',event.text)}));
         }
@@ -670,7 +657,6 @@ export function useWorkspace() {
   return {
     ready,preview,busy,error,saveError,state,unlock,lock,biometric,autoPromptBiometric,unlockBiometric,disableBiometric,runUpdateInstallation,clearError:()=>setError(null),
     saveVps,deleteVps,saveHermes,deleteHermes,
-    updateCockpit:(config:SavedState['cockpit'])=>commit(s=>({...s,cockpit:config})),
     updateSettings:(settings:Settings)=>commit(s=>({...s,settings:{fontSize:Math.min(24,Math.max(10,settings.fontSize)),scrollback:Math.min(20000,Math.max(1000,settings.scrollback))}})),
     sessions,activeSessionId,setActiveSessionId,connectVps,closeSession,hostPrompt,acceptHost,rejectHost:()=>setHostPrompt(null),
     subscribeTerminal,writeTerminal,resizeTerminal,

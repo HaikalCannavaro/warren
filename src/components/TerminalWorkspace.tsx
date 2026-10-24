@@ -6,7 +6,6 @@ import '@xterm/xterm/css/xterm.css';
 import type { Settings, TerminalSession, VpsProfile } from '../types';
 import { sanitizePaste } from '../lib/domain';
 import { registerTerminal } from '../lib/terminalBridge';
-import { encodeTerminalKey, type TerminalModifier } from '../lib/terminalKeys';
 import { Dialog } from './Dialog';
 import { useI18n } from '../lib/i18n';
 
@@ -50,10 +49,6 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
   const latest = useRef({ subscribeTerminal, writeTerminal, resizeTerminal, status: session.status });
   latest.current = { subscribeTerminal, writeTerminal, resizeTerminal, status: session.status };
   const [paste, setPaste] = useState<string | null>(null);
-  const [modifier, setModifier] = useState<TerminalModifier>(null);
-  const modifierRef = useRef<TerminalModifier>(null);
-  const modifyKey = (data: string) => { const encoded = encodeTerminalKey(data, modifierRef.current); modifierRef.current = null; setModifier(null); return encoded; };
-  const toggleModifier = (next: TerminalModifier) => { const value = modifierRef.current === next ? null : next; modifierRef.current = value; setModifier(value); terminal.current?.focus(); };
   const [error, setError] = useState('');
 
   const fitTerminal = useCallback(() => {
@@ -90,7 +85,7 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
     fit.current = fitAddon;
     const unregisterTerminal = registerTerminal(session.id, term);
     const incoming = latest.current.subscribeTerminal(session.id, (bytes) => term.write(bytes));
-    const outgoing = term.onData((data) => { if (latest.current.status === 'connected') void latest.current.writeTerminal(session.id, modifyKey(data)).catch((cause) => setError(String(cause))); });
+    const outgoing = term.onData((data) => { if (latest.current.status === 'connected') void latest.current.writeTerminal(session.id, data).catch((cause) => setError(String(cause))); });
     const resize = term.onResize(({ cols, rows }) => { if (latest.current.status === 'connected') void latest.current.resizeTerminal(session.id, cols, rows).catch((cause) => setError(String(cause))); });
     const resizeObserver = new ResizeObserver(() => { fitTerminal(); });
     resizeObserver.observe(element);
@@ -116,14 +111,14 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
   }, [session.id]);
   useEffect(() => { if (terminal.current) { terminal.current.options.fontSize = settings.fontSize; terminal.current.options.scrollback = settings.scrollback; } if (visible && container.current?.clientWidth) fitTerminal(); }, [settings.fontSize, settings.scrollback, visible, fitTerminal]);
   useEffect(() => { if (!visible) return; const frame = requestAnimationFrame(() => { if (container.current?.clientWidth) { fitTerminal(); terminal.current?.focus(); if (session.status === 'connected' && terminal.current) void latest.current.resizeTerminal(session.id, terminal.current.cols, terminal.current.rows).catch((cause) => setError(String(cause))); } }); return () => cancelAnimationFrame(frame); }, [visible, session.status, session.id, fitTerminal]);
-  const sendKey = (data: string) => { if (session.status === 'connected') void writeTerminal(session.id, modifyKey(data)).catch((cause) => setError(String(cause))); terminal.current?.focus(); };
+  const sendKey = (data: string) => { if (session.status === 'connected') void writeTerminal(session.id, data).catch((cause) => setError(String(cause))); terminal.current?.focus(); };
   return <div id={`session-panel-${session.id}`} role="tabpanel" aria-labelledby={`session-tab-${session.id}`} className="terminal-pane" style={{ display: selected ? 'flex' : 'none' }}>
     <div className="session-info"><span className={`status-dot ${session.status}`}/><span>{statusLabels[session.status]}</span><span className="session-host">{session.host}</span></div>
     {session.error && <p className="terminal-error" role="alert">{session.error}</p>}
     {error && <div className="terminal-error" role="alert">{error}<button className="icon-button" aria-label={t("Dismiss error", "Tutup pesan kesalahan")} onClick={() => setError('')}><X size={14}/></button></div>}
     <div className="xterm-shell"><div className="xterm-container" ref={container} aria-label={`Terminal ${session.label}`}/></div>
     <div className="terminal-keybar" aria-label={t("Terminal shortcuts", "Tombol pintasan terminal")}>
-      <button disabled={session.status !== 'connected'} onClick={() => sendKey('\x1b')}>ESC</button><button disabled={session.status !== 'connected'} onClick={() => sendKey('\t')}>TAB</button><button disabled={session.status !== 'connected'} aria-pressed={modifier==='ctrl'} onClick={()=>toggleModifier('ctrl')}>CTRL</button><button disabled={session.status !== 'connected'} aria-pressed={modifier==='alt'} onClick={()=>toggleModifier('alt')}>ALT</button><button disabled={session.status !== 'connected'} onClick={()=>sendKey('|')}>|</button><button disabled={session.status !== 'connected'} onClick={()=>sendKey('/')}>/</button><button disabled={session.status !== 'connected'} onClick={() => sendKey('\x03')}>Ctrl C</button>
+      <button disabled={session.status !== 'connected'} onClick={() => sendKey('\x03')}>Ctrl C</button><button disabled={session.status !== 'connected'} onClick={() => sendKey('\x1b')}>Esc</button><button disabled={session.status !== 'connected'} onClick={() => sendKey('\t')}>Tab</button>
       <span className="keybar-divider"/>
       <button disabled={session.status !== 'connected'} aria-label={t("Left arrow", "Panah kiri")} onClick={() => sendKey('\x1b[D')}><ArrowLeft size={15}/></button><button disabled={session.status !== 'connected'} aria-label={t("Up arrow", "Panah atas")} onClick={() => sendKey('\x1b[A')}><ArrowUp size={15}/></button><button disabled={session.status !== 'connected'} aria-label={t("Down arrow", "Panah bawah")} onClick={() => sendKey('\x1b[B')}><ArrowDown size={15}/></button><button disabled={session.status !== 'connected'} aria-label={t("Right arrow", "Panah kanan")} onClick={() => sendKey('\x1b[C')}><ArrowRight size={15}/></button>
       <button disabled={session.status !== 'connected'} aria-label="Enter" onClick={() => sendKey('\r')}><CornerDownLeft size={15}/></button>

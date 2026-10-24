@@ -59,19 +59,6 @@ async function opened(){const h=renderHook(()=>useWorkspace());await act(async()
 function deferred(){let resolve!:()=>void;let reject!:(reason:Error)=>void;const promise=new Promise<void>((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};}
 
 describe('Gateway workspace integration',()=>{
-  it('updates stable inline tool IDs, separates tool groups after text, and preserves incomplete outcomes', async()=>{
-    f.state!.hermes[0]={...f.state!.hermes[0],transport:'gateway',url:'wss://hermes.example/api/ws',model:''};
-    f.gatewaySend.mockImplementationOnce(async(_s:string,_t:string,_id:string,onEvent:(e:HermesEvent)=>void)=>{
-      onEvent({type:'tool',text:'Running terminal',call:{id:'call-1',name:'terminal',param:'test',state:'running',duration:'',args:{command:'npm test'}}});
-      onEvent({type:'tool',text:'Completed terminal',call:{id:'call-1',name:'terminal',param:'',state:'done',duration:'0.4s',output:'Passed'}});
-      onEvent({type:'delta',text:'Now inspecting a file.'});
-      onEvent({type:'tool',text:'Running read_file',call:{id:'call-2',name:'read_file',param:'README.md',state:'running',duration:''}});
-      onEvent({type:'done',finishReason:'stop'});
-    });
-    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Run');});await act(async()=>{await h.result.current.sendMessage(id);});
-    const message=h.result.current.state.conversations[0].messages.find(m=>m.role==='assistant')!;
-    expect(message.tools).toHaveLength(2);expect(message.tools![0]).toMatchObject({id:'call-1',state:'done',args:{command:'npm test'},output:'Passed',group:0});expect(message.tools![1]).toMatchObject({id:'call-2',state:'unknown',group:1});
-  });
   const gateway=()=>{f.state!.hermes[0]={...f.state!.hermes[0],transport:'gateway',url:'wss://hermes.example/api/ws',model:''};};
   it('persists confirmed profile identity and snapshots it per reply without changing routing',async()=>{
     gateway();f.state!.hermes[0].agentProfile='Configured label';f.gatewayProfile.mockReturnValue('Leveret');
