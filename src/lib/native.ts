@@ -103,3 +103,7 @@ export async function clearBiometric():Promise<boolean> {
   if (!nativeAvailable()) return false;
   return invoke<boolean>('biometric_clear');
 }
+
+export async function queryGpuSnapshot(request:SshRequest):Promise<string> {
+  requireNative(); return invoke('ssh_gpu_snapshot',{request});
+}

@@ -1,5 +1,16 @@
 # Pengujian Warren
 
+## Mission Control v0.3.0 — 24 Oktober 2026 UTC
+
+- **326 tes frontend dalam 25 berkas**, **71 tes alat rilis**, serta **43 tes native Rust** lulus. TypeScript dan build produksi lulus tanpa peringatan chunk melebihi 500 KB. Native diuji dengan Rust 1.99.1 dan dependensi GTK/WebKit Linux yang diekstrak ke workspace cloud.
+- Tes transport native memakai server HTTP/WebSocket/SSH loopback sebenarnya untuk memeriksa autentikasi, penolakan redirect, host key berubah, command GPU tetap, dan exit status. Kredensial perangkat pengguna tidak diperlukan atau dimasukkan ke source.
+- Smoke browser memeriksa REST Kanban board/orchestration/workers, A2A feed, perubahan ready → running melalui WebSocket, dan GET rincian task. Data fixture hanya berasal dari server uji lokal.
+- Kelima tab diperiksa pada 390 × 844 dan 430 × 844 tanpa overflow horizontal; composer tidak menutupi bottom navigation. Mockup tersimpan di [docs/mockups](mockups/README.md). Tampilan rilis dimulai tanpa data contoh.
+- Tes updater memeriksa bahwa unduhan siap pasang tetap tersedia setelah pindah tab, serta memakai penjagaan penyimpanan workspace sebelum installer dibuka. Tes publikasi menolak aset hilang/tambahan/berubah, paket satu platform, serta promosi ulang release yang sudah diterbitkan. Signature manifest Android publik v0.2.3 diverifikasi dengan public key produksi yang dipertahankan.
+- Build installer Windows/APK dilakukan oleh workflow rilis terpisah. Koneksi ke VPS/PC fisik dan pemasangan upgrade pada perangkat belum diuji dari lingkungan ini. Pemeriksaan ini tidak mengklaim mission/task write API tersedia; integrasi Kanban memakai endpoint baca yang diberikan.
+
+Catatan berikut adalah riwayat tahap sebelumnya; angka tes, keterbatasan toolchain, label contoh, dan versi di dalamnya bukan status source saat ini.
+
 ## Profile, panel berdampingan, dan navigasi — 23 Oktober 2026
 
 - **237 tes frontend dalam 15 berkas lulus**, termasuk metadata Profile, penyimpanan identitas per balasan, metadata yang hilang, callback koneksi lama, form Profile/model terpisah, panel tanpa overlay, dan komponen chat/terminal yang tetap terpasang saat navigasi.

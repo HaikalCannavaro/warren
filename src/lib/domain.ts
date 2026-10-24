@@ -1,6 +1,9 @@
 import { translate } from './i18n';
 import type { Conversation, SavedState, VpsProfile } from '../types';
 import { interruptExecutionLog } from './executionLog';
+import { sanitizeToolCalls } from './toolExecution';
+import { sanitizeArtifacts } from './artifacts';
+import { sanitizeCockpitConfig } from './cockpitConfig';
 import { hasUncertainSessionMutation, sanitizeCommandResults } from './slashCommands';
 
 export function emptyState(): SavedState {
@@ -59,16 +62,16 @@ export function recoverState(input: unknown): SavedState {
     }
   }
   const interruption=translate("The app closed during this request. Its status in Hermes is unknown. It was not resent.", "Aplikasi terhenti saat permintaan berlangsung. Status pekerjaan di Hermes belum diketahui. Tidak dikirim ulang.");
-  return {...s, settings: {
+  return {...s, cockpit:sanitizeCockpitConfig(s.cockpit), settings: {
     fontSize: Math.max(10, Math.min(24, Number(s.settings.fontSize) || 14)),
     scrollback: Math.max(1000, Math.min(20000, Number(s.settings.scrollback) || 5000)),
-  }, hermes:s.hermes.map(profile=>({...profile,agentProfile:normalizeAgentProfileName(profile.agentProfile)})), conversations: s.conversations.map(c => ({...c,
+  }, hermes:s.hermes.map(profile=>({...profile,executionNode:typeof profile.executionNode==='string'&&profile.executionNode.length<=256?profile.executionNode:undefined,category:['Core Fleet','Security','Companions'].includes(profile.category??'')?profile.category:undefined,agentProfile:normalizeAgentProfileName(profile.agentProfile)})), conversations: s.conversations.map(c => ({...c,
     executionLog:interruptExecutionLog(c,interruption),
     commandResults:sanitizeCommandResults(c.commandResults,interruption),
     gatewayStateUncertain:c.gatewayStateUncertain===true || hasUncertainSessionMutation(c.commandResults) ? true : undefined,
     gatewaySessionId:typeof c.gatewaySessionId==='string' && c.gatewaySessionId.trim() && c.gatewaySessionId.length<=512 ? c.gatewaySessionId : undefined,
     agentProfile:normalizeAgentProfileName(c.agentProfile),
-    messages:c.messages.map(m=> ({...m,agentProfile:m.role==='assistant'?normalizeAgentProfileName(m.agentProfile):undefined,...(m.status === 'streaming' ? {status:'unknown' as const,error:interruption} : {})})),
+    messages:c.messages.map(m=> ({...m,artifacts:sanitizeArtifacts(m.artifacts),tools:sanitizeToolCalls(m.tools),agentProfile:m.role==='assistant'?normalizeAgentProfileName(m.agentProfile):undefined,...(m.status === 'streaming' ? {status:'unknown' as const,error:interruption} : {})})),
   }))};
 }
 

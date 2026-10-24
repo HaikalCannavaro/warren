@@ -53,6 +53,19 @@ function pasteIntoTerminal(text: string) {
 }
 
 describe('terminal paste safety and lifetime', () => {
+  it('sends mobile modifier keys once and preserves literal pipe and slash input', () => {
+    const {writeTerminal}=setup();
+    fireEvent.click(screen.getByRole('button',{name:'CTRL'}));
+    expect(screen.getByRole('button',{name:'CTRL'}).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button',{name:'/'}));
+    expect(writeTerminal).toHaveBeenLastCalledWith('session-1','/');
+    expect(screen.getByRole('button',{name:'CTRL'}).getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(screen.getByRole('button',{name:'ALT'}));
+    fireEvent.click(screen.getByRole('button',{name:'|'}));
+    expect(writeTerminal).toHaveBeenLastCalledWith('session-1','\x1b|');
+    fireEvent.click(screen.getByRole('button',{name:'|'}));
+    expect(writeTerminal).toHaveBeenLastCalledWith('session-1','|');
+  });
   it('switches terminal controls and paste review without recreating the terminal or changing its text', () => {
     setLanguage('en');
     const { writeTerminal, callbacks, unsubscribe } = setup();

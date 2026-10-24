@@ -1,3 +1,4 @@
+mod cockpit;
 mod biometric;
 mod hermes;
 mod gateway;
@@ -12,6 +13,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .manage(ssh::SshState::default())
+        .manage(cockpit::CockpitState::default())
         .manage(gateway::GatewayState::default())
         .setup(|app| {
             let data_dir = app.path().app_local_data_dir()?;
@@ -31,10 +33,15 @@ pub fn run() {
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 window.state::<ssh::SshState>().disconnect_all();
+                window.state::<cockpit::CockpitState>().disconnect_all();
                 window.state::<gateway::GatewayState>().disconnect_all();
             }
         })
         .invoke_handler(tauri::generate_handler![
+            cockpit::cockpit_get,
+            cockpit::cockpit_events_open,
+            cockpit::cockpit_events_close,
+            ssh::ssh_gpu_snapshot,
             ssh::ssh_probe,
             ssh::ssh_connect,
             ssh::ssh_write,

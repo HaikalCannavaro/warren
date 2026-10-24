@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing version tag to build, for example v0.2.1'
+        description: 'Existing version tag to build, for example v0.3.0'
         required: true
         type: string
 
@@ -35,7 +35,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - name: Reject reused versions and mismatched tags
         id: identity
@@ -46,6 +46,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:release
+      - run: npm run build
 
   windows:
     name: Build Windows installer
@@ -59,8 +60,14 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
+      - name: Require the existing production updater key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          : "${TAURI_SIGNING_PRIVATE_KEY:?Configure the existing TAURI_SIGNING_PRIVATE_KEY repository secret; do not generate a replacement key.}"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -106,8 +113,19 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
+      - name: Require the existing Android release identity
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          : "${ANDROID_KEYSTORE_BASE64:?Configure the original Android keystore; a new key cannot update existing installations.}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing ANDROID_KEYSTORE_PASSWORD}"
+          : "${ANDROID_KEY_ALIAS:?Missing ANDROID_KEY_ALIAS}"
+          : "${ANDROID_KEY_PASSWORD:?Missing ANDROID_KEY_PASSWORD}"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -166,8 +184,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  draft:
-    name: Package both platforms and create draft release
+  publish:
+    name: Verify both platforms and publish stable update
     needs: [prepare, windows, android]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -181,7 +199,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - uses: actions/download-artifact@v4
@@ -213,9 +231,14 @@ jobs:
           path: release/*
           if-no-files-found: error
           retention-days: 14
-      - name: Explain final publication step
+      - name: Verify uploaded signatures and hashes, then activate in-app updates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: node scripts/promote-release.mjs "release/$RELEASE_TAG"
+      - name: Report publication
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           echo "## Warren $RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
-          echo "Both platforms were packaged into one draft release. Test the APK and installer, then publish the draft as the latest stable release to activate updates." >> "$GITHUB_STEP_SUMMARY"
+          echo "Both signed platform packages were uploaded, downloaded again, and verified before stable publication. Windows and Android in-app update feeds now target this release. Physical-device upgrade testing remains a separate check." >> "$GITHUB_STEP_SUMMARY"
