@@ -8,10 +8,13 @@ Antarmuka memakai **English** secara default. Pilih **Settings → Language → 
 
 Sumber ikon vektor berada di `public/brand/`. Jalankan `npm run icons:generate` untuk menghasilkan ulang ikon Windows dan launcher Android, termasuk adaptive icon dan versi monokrom. `npm run android:init` menjalankan langkah ini otomatis setelah proyek Android dibuat; jika menjalankan inisialisasi langsung lewat Tauri, jalankan generator ikon sesudahnya. Nama proses build desktop adalah `warren.exe`.
 
-Source ini memuat UI dan transport native, dengan target Windows dan Android. Hasil tes frontend, pemeriksaan TypeScript, dan build terbaru tersedia dalam [catatan pengujian](docs/TESTING.md). Perubahan terbaru belum diuji melalui installer Windows/APK baru atau koneksi server langsung dalam pengerjaan ini. Nomor versi tetap 0.2.0 mengikuti baseline repository; naikkan saat menyiapkan rilis berikutnya.
+Source ini memuat UI dan transport native, dengan target Windows dan Android. Hasil tes frontend, pemeriksaan TypeScript, dan build terbaru tersedia dalam [catatan pengujian](docs/TESTING.md). Perubahan terbaru belum diuji melalui installer Windows/APK baru atau koneksi server langsung dalam pengerjaan ini. Nomor versi tetap 0.4.0 mengikuti metadata proyek; naikkan saat menyiapkan rilis berikutnya.
 
 ## Fitur dalam source
 
+- **Observer** sebagai halaman awal dan menu pertama: telemetry Linux/NVIDIA dari target host, roster 10 agen, Kanban Hermes, pemilih host orkestrator terpisah, dan auto-poll 10 detik. [Panduan Observer](docs/OBSERVER.md).
+- **Burrow**, ruang temu para agen: stream komunikasi A2A melalui SSH, pemilih sumber VPS, filter spesialis, dan drawer transkrip berdasarkan task ID. [Panduan Burrow](docs/BURROW.md).
+- Pilihan tema **Warren Dark / Terracotta** di Settings, ikon sesuai palet, dan pengguliran riwayat terminal melalui sentuhan mobile. [Panduan tema dan terminal mobile](docs/THEMES-AND-MOBILE-TERMINAL.md).
 - Terminal interaktif xterm.js, beberapa sesi, resize, tombol bantu terminal, dan konfirmasi sebelum paste.
 - Profil VPS dengan password atau private key; fingerprint host harus dikonfirmasi sebelum autentikasi. Perubahan host key ditolak.
 - Profil Hermes dengan URL dan token sesuai jenis koneksi, tes koneksi, jawaban streaming dan Markdown.
@@ -40,7 +43,7 @@ npm run build
 npm run preview -- --port 1420
 ```
 
-Buka `http://127.0.0.1:1420`. Browser hanya menampilkan demo UI: formulir bisa dijelajahi, data ruang kerja hanya berada di memori dan hilang saat reload. Pilihan bahasa disimpan terpisah di perangkat dan tetap berlaku setelah reload. SSH, chat nyata, dan penyimpanan terenkripsi berjalan di aplikasi Tauri.
+Buka `http://127.0.0.1:1420`. Browser menampilkan antarmuka tanpa koneksi native: formulir bisa dijelajahi, data ruang kerja hanya berada di memori dan hilang saat reload. Pilihan bahasa dan tema disimpan terpisah di perangkat dan tetap berlaku setelah reload. SSH, chat nyata, dan penyimpanan terenkripsi berjalan di aplikasi Tauri.
 
 Untuk mengembangkan UI dengan perubahan langsung, gunakan `npm run dev`. Jika PowerShell memblokir `npm.ps1`, gunakan `npm.cmd` pada perintah yang sama. Jangan mematikan kebijakan keamanan sistem hanya untuk menjalankannya.
 

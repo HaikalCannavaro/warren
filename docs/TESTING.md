@@ -1,5 +1,17 @@
 # Pengujian Warren
 
+## Observer, Burrow, tema, dan terminal mobile — 25 Oktober 2026
+
+- **322 tes frontend dalam 28 berkas lulus.** Pemeriksaan TypeScript dan build produksi frontend lulus. Main JavaScript 953,14 KB (gzip 275,35 KB); drawer transkrip dimuat terpisah. Peringatan ukuran chunk Vite di atas 500 KB masih ada.
+- Observer adalah halaman awal dan menu pertama di sidebar/mobile, dengan ikon SVG pengguna. Linux/NVIDIA, SQLite JSON, roster sepuluh agen, filter task, cancellation saat host berubah, respons terlambat, polling tanpa overlap, dan state tanpa data tercakup dalam tes.
+- Burrow memakai SSH `tail -f -n 15` dengan buffering UTF-8/JSONL, pemilih sumber, cleanup kanal, serta pencarian transkrip berdasarkan task ID. Empat pemeriksaan shell lokal untuk lookup transkrip lulus: task tepat, tidak ditemukan, direktori kosong, dan direktori hilang.
+- Warren Dark dan Terracotta diperiksa bersama ikon palet, custom dropdown, drawer Markdown, dan scroll terminal sentuh. Perubahan tema memperbarui xterm tanpa mengganti sesi. Perintah tes navigasi juga memastikan terminal dan draft Agent bertahan.
+- UI desktop 1280×900 dan ponsel 390×844 diperiksa dengan fixture terpisah. Pergantian hardware Linux ke GPU mempertahankan sumber orkestrator. Tidak ada overflow dokumen horizontal pada lebar ponsel; tabel Kanban memiliki area scroll sendiri. Fixture pengujian tidak dimasukkan ke source aplikasi atau ZIP.
+- Source aplikasi tidak menampilkan data buatan atau label demo/simulasi pada Burrow/Observer. Pemeriksaan tanpa koneksi memakai state menunggu/terputus.
+- Rust/Cargo tidak tersedia pada lingkungan pengerjaan tahap ini. Tes Rust tersedia tetapi belum dijalankan; kompilasi native, VPS sebenarnya, Windows SSH/GPU sebenarnya, installer Windows, APK, dan uji sentuh pada perangkat Android belum divalidasi.
+
+Catatan berikut adalah hasil tahap sebelumnya, termasuk identitas dan penanda preview yang telah diganti oleh perubahan terbaru.
+
 ## Profile, panel berdampingan, dan navigasi — 23 Oktober 2026
 
 - **237 tes frontend dalam 15 berkas lulus**, termasuk metadata Profile, penyimpanan identitas per balasan, metadata yang hilang, callback koneksi lama, form Profile/model terpisah, panel tanpa overlay, dan komponen chat/terminal yang tetap terpasang saat navigasi.

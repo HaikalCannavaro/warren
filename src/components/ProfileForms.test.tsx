@@ -77,9 +77,9 @@ describe('Hermes Gateway connection', () => {
 
   it('keeps old profiles on HTTP and clears endpoint credentials when switching transport', () => {
     render(<HermesForm profile={{ id: 'h-1', name: 'Hermes', url: 'https://example.com/v1', model: 'model', token: 'api-key' }} onSave={vi.fn()} onClose={vi.fn()}/>);
-    const transport = screen.getByLabelText('Jenis koneksi') as HTMLSelectElement;
-    expect(transport.value).toBe('openai');
-    fireEvent.change(transport, { target: { value: 'gateway' } });
+    const transport = screen.getByRole('combobox', { name: 'Jenis koneksi' });
+    expect(transport.textContent).toContain('HTTP');
+    fireEvent.click(transport); fireEvent.click(screen.getByRole('option', { name: /Gateway/ }));
     expect((screen.getByLabelText(/^URL server/) as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText(/^Token Gateway/) as HTMLInputElement).value).toBe('');
     expect(screen.getByText(/Mengganti jenis koneksi/)).toBeTruthy();

@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TerminalWorkspace } from './TerminalWorkspace';
 import { setLanguage } from '../lib/i18n';
+import { setTheme } from '../lib/theme';
 
 const terminals = vi.hoisted(() => [] as {
   cols: number; rows: number;
+  options: {theme?: {background?: string}};
   write: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn>; resize: ReturnType<typeof vi.fn>;
   _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } };
 }[]);
@@ -23,6 +25,7 @@ vi.mock('@xterm/xterm', () => ({ Terminal: class {
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() { fitCalls.count++; } } }));
 
 beforeEach(() => {
+  setTheme('dark');
   setLanguage('id');
   terminals.length = 0;
   fitCalls.count = 0;
@@ -53,6 +56,16 @@ function pasteIntoTerminal(text: string) {
 }
 
 describe('terminal paste safety and lifetime', () => {
+  it('updates the terminal palette without recreating its session or sending input', () => {
+    const { writeTerminal, callbacks } = setup();
+    callbacks[0](new Uint8Array([111, 107]));
+    act(() => setTheme('terracotta'));
+    expect(terminals).toHaveLength(1);
+    expect(terminals[0].options.theme?.background).toBe('#F5EBDD');
+    expect(terminals[0].dispose).not.toHaveBeenCalled();
+    expect(writeTerminal).not.toHaveBeenCalled();
+    act(() => setTheme('dark'));
+  });
   it('switches terminal controls and paste review without recreating the terminal or changing its text', () => {
     setLanguage('en');
     const { writeTerminal, callbacks, unsubscribe } = setup();

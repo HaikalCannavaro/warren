@@ -7,7 +7,7 @@ use std::{
 use russh::{client, keys::{decode_secret_key, HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate}, ChannelMsg, Disconnect};
 use serde::{Deserialize, Serialize};
 use tauri::{ipc::Channel, State};
-use tokio::{sync::{mpsc, watch}, time::timeout};
+use tokio::{sync::{mpsc, watch, Semaphore}, time::timeout};
 use zeroize::Zeroize;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -15,6 +15,10 @@ const SETUP_TIMEOUT: Duration = Duration::from_secs(45);
 const IO_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_INPUT_BYTES: usize = 64 * 1024;
 const MAX_SESSIONS: usize = 16;
+const OBSERVER_GPU: &str = "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits";
+const OBSERVER_LINUX: &str = "export LC_ALL=C; cat /proc/loadavg && free -m && df -h / && uptime -p && printf '\\n__WARREN_CORES__\\n' && (getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || true)";
+const OBSERVER_FLEET: &str = "sqlite3 -readonly -json /root/.hermes/kanban.db \"SELECT assignee, status, title FROM tasks WHERE status IN ('running', 'blocked', 'review');\"";
+const OBSERVER_TASKS: &str = "sqlite3 -readonly -json /root/.hermes/kanban.db \"SELECT id, title, assignee, status, priority, datetime(created_at, 'unixepoch') as created_at FROM tasks ORDER BY created_at DESC LIMIT 25;\"";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,11 +64,24 @@ struct SessionControl {
     tx: mpsc::Sender<SessionCommand>,
     cancel: watch::Sender<bool>,
     ready: Arc<AtomicBool>,
+    connection: Option<Arc<SshHandle>>,
+    burrow_slot: Arc<Semaphore>,
+}
+
+struct BurrowListener { cancel: watch::Sender<bool> }
+
+#[derive(Clone, Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum BurrowEvent {
+    Data { data: Vec<u8> },
+    Status { status: &'static str, #[serde(skip_serializing_if = "Option::is_none")] message: Option<String> },
 }
 
 #[derive(Default, Clone)]
 pub struct SshState {
     sessions: Arc<Mutex<HashMap<String, SessionControl>>>,
+    burrow_listeners: Arc<Mutex<HashMap<String, BurrowListener>>>,
+    observer_reads: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
 }
 
 impl SshState {
@@ -77,6 +94,10 @@ impl SshState {
         if let Ok(sessions) = self.sessions.lock() {
             for control in sessions.values() { let _ = control.cancel.send(true); }
         }
+        if let Ok(listeners) = self.burrow_listeners.lock() {
+            for listener in listeners.values() { let _ = listener.cancel.send(true); }
+        }
+        if let Ok(reads) = self.observer_reads.lock() { for cancel in reads.values() { let _ = cancel.send(true); } }
     }
 }
 
@@ -281,7 +302,7 @@ pub async fn ssh_connect(request: SshRequest, on_event: Channel<SshEvent>, state
         let mut sessions = sessions.lock().map_err(|_| "Terminal state unavailable.".to_string())?;
         if sessions.contains_key(&session_id) { return Err("This terminal session is already connecting or open.".into()); }
         if sessions.len() >= MAX_SESSIONS { return Err("Close a terminal before opening more than 16 sessions.".into()); }
-        sessions.insert(session_id.clone(), SessionControl { tx, cancel, ready: ready.clone() });
+        sessions.insert(session_id.clone(), SessionControl { tx, cancel, ready: ready.clone(), connection: None, burrow_slot: Arc::new(Semaphore::new(1)) });
     }
     let result = tokio::select! {
         biased;
@@ -290,6 +311,10 @@ pub async fn ssh_connect(request: SshRequest, on_event: Channel<SshEvent>, state
     };
     match result {
         Ok((handle, channel)) => {
+            let handle = Arc::new(handle);
+            if let Ok(mut sessions) = sessions.lock() {
+                if let Some(control) = sessions.get_mut(&session_id) { control.connection = Some(handle.clone()); }
+            }
             ready.store(true, Ordering::Release);
             if on_event.send(SshEvent::Status { status: "connected", message: None }).is_err() {
                 let _ = timeout(IO_TIMEOUT, handle.disconnect(Disconnect::ByApplication, "View closed", "en")).await;
@@ -309,7 +334,7 @@ pub async fn ssh_connect(request: SshRequest, on_event: Channel<SshEvent>, state
 
 async fn run_session(
     session_id: String,
-    handle: SshHandle,
+    handle: Arc<SshHandle>,
     mut channel: SshChannel,
     mut commands: mpsc::Receiver<SessionCommand>,
     mut cancel: watch::Receiver<bool>,
@@ -391,9 +416,275 @@ pub async fn ssh_disconnect(session_id: String, state: State<'_, SshState>) -> R
     Ok(())
 }
 
+// Deliberately expose a log reader, never an arbitrary shell-execution IPC command.
+fn burrow_lookup_command(task_id: &str) -> Result<String, String> {
+    if !task_id.starts_with("task-") || task_id.len() <= 5 || task_id.len() > 160
+        || !task_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+        return Err("Invalid Burrow task ID. Expected task- followed by letters, digits, underscores or hyphens.".into());
+    }
+    // Match the complete JSON field value; task-abc must not match task-abcd.
+    Ok(format!(r#"if [ ! -d /root/.hermes/profiles/leveret/a2a_conversations ] || [ ! -r /root/.hermes/profiles/leveret/a2a_conversations ]; then printf '%s\n' 'Burrow conversation directory is unavailable.' >&2; exit 1; fi; set -- /root/.hermes/profiles/leveret/a2a_conversations/ctx-*.jsonl; if [ -e "$1" ]; then grep -l -E -- '"task_id"[[:space:]]*:[[:space:]]*"{task_id}"' "$@" | head -n 1; fi"#))
+}
+
+fn burrow_file_command(path: &str) -> Result<String, String> {
+    let id = path.strip_prefix("/root/.hermes/profiles/leveret/a2a_conversations/")
+        .and_then(|name| name.strip_suffix(".jsonl")).ok_or("Unexpected Burrow transcript path.")?;
+    if !id.starts_with("ctx-") || id.len() <= 4 || id.len() > 160
+        || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+        return Err("Unexpected Burrow transcript filename.".into());
+    }
+    Ok(format!("cat -- '{path}'"))
+}
+
+#[derive(Serialize)]
+pub struct BurrowTranscriptResult { path: Option<String>, content: String }
+
+#[tauri::command]
+pub async fn ssh_read_burrow(session_id: String, task_id: String, state: State<'_, SshState>) -> Result<BurrowTranscriptResult, String> {
+    let command = burrow_lookup_command(&task_id)?;
+    let (connection, mut cancel, slot) = {
+        let sessions = state.sessions.lock().map_err(|_| "SSH state unavailable.")?;
+        let control = sessions.get(&session_id).ok_or("Connect a VPS terminal before reading Burrow logs.")?;
+        if !control.ready.load(Ordering::Acquire) || *control.cancel.borrow() { return Err("The SSH session is offline.".into()); }
+        let connection = control.connection.clone().ok_or("The SSH session is not ready.")?;
+        (connection, control.cancel.subscribe(), control.burrow_slot.clone())
+    };
+    let _permit = slot.try_acquire_owned().map_err(|_| "A Burrow read is already in progress on this SSH session.")?;
+    let found = read_ssh_text(&connection, &mut cancel, None, &command).await?;
+    let path = found.trim();
+    if path.is_empty() { return Ok(BurrowTranscriptResult { path: None, content: String::new() }); }
+    let command = burrow_file_command(path)?;
+    let content = read_ssh_text(&connection, &mut cancel, None, &command).await?;
+    Ok(BurrowTranscriptResult { path: Some(path.into()), content })
+}
+
+async fn wait_for_read_cancel(cancel: &mut Option<watch::Receiver<bool>>) {
+    if let Some(receiver) = cancel.as_mut() { let _ = receiver.changed().await; }
+    else { std::future::pending::<()>().await; }
+}
+
+async fn read_ssh_text(connection: &SshHandle, cancel: &mut watch::Receiver<bool>, mut request_cancel: Option<watch::Receiver<bool>>, command: &str) -> Result<String, String> {
+    if *cancel.borrow() { return Err("The SSH session is offline.".into()); }
+    if request_cancel.as_ref().is_some_and(|receiver| *receiver.borrow()) { return Err("SSH read cancelled.".into()); }
+    // Opening an exec channel leaves the interactive PTY, its input and output intact.
+    let mut channel = tokio::select! {
+        biased;
+        _ = cancel.changed() => return Err("SSH disconnected while opening the read channel.".into()),
+        _ = wait_for_read_cancel(&mut request_cancel) => return Err("SSH read cancelled.".into()),
+        result = timeout(IO_TIMEOUT, connection.channel_open_session()) => result
+            .map_err(|_| "Opening the SSH read channel timed out.")?
+            .map_err(|_| "The server refused a separate SSH read channel.")?,
+    };
+    let result = tokio::select! {
+        biased;
+        _ = cancel.changed() => Err("SSH disconnected while reading data.".into()),
+        _ = wait_for_read_cancel(&mut request_cancel) => Err("SSH read cancelled.".into()),
+        result = timeout(Duration::from_secs(20), async {
+            channel.exec(true, command.as_bytes()).await.map_err(|_| "Could not request the SSH read.".to_string())?;
+            let mut output = Vec::new();
+            let mut stderr = Vec::new();
+            let mut exit_status = None;
+            while let Some(message) = channel.wait().await {
+                match message {
+                    ChannelMsg::Data { data } => {
+                        if output.len() + data.len() > 8 * 1024 * 1024 { return Err("SSH output exceeds the 8 MiB read limit; data was not truncated.".into()); }
+                        output.extend_from_slice(&data);
+                    }
+                    ChannelMsg::ExtendedData { data, .. } => { stderr.extend_from_slice(&data[..data.len().min(4096_usize.saturating_sub(stderr.len()))]); }
+                    ChannelMsg::ExitStatus { exit_status: status } => { exit_status = Some(status); }
+                    ChannelMsg::Failure | ChannelMsg::ExitSignal { .. } => return Err("The server rejected the SSH read.".into()),
+                    ChannelMsg::Close => break,
+                    _ => {}
+                }
+            }
+            match exit_status {
+                Some(0) if output.is_empty() && !stderr.is_empty() => Err(format!("The SSH read returned no data. {}", String::from_utf8_lossy(&stderr).trim())),
+                Some(0) => String::from_utf8(output).map_err(|_| "SSH output must be UTF-8 text.".into()),
+                Some(_) => Err(format!("Could not read server data. Check installed utilities, paths and SSH account permissions. {}", String::from_utf8_lossy(&stderr).trim())),
+                None => Err("SSH ended without confirming the read. Retry explicitly.".into()),
+            }
+        }) => result.unwrap_or_else(|_| Err("Reading SSH data timed out.".into())),
+    };
+    let _ = timeout(Duration::from_secs(2), channel.close()).await;
+    result
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ObserverReadKind { Hardware, Fleet, Tasks }
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ObserverResult {
+    Hardware { linux: Option<String>, gpu: Option<String>, warning: Option<String> },
+    Fleet { data: String },
+    Tasks { data: String },
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ObserverEvent { Result { result: ObserverResult }, Error { message: String } }
+
+#[tauri::command]
+pub fn ssh_observer_start(session_id: String, request_id: String, kind: ObserverReadKind, on_event: Channel<ObserverEvent>, state: State<'_, SshState>) -> Result<(), String> {
+    if request_id.is_empty() || request_id.len() > 128 { return Err("Invalid Observer request ID.".into()); }
+    let (connection, mut session_cancel) = {
+        let sessions = state.sessions.lock().map_err(|_| "SSH state unavailable.")?;
+        let control = sessions.get(&session_id).ok_or("Connect the selected Observer host over SSH first.")?;
+        if !control.ready.load(Ordering::Acquire) || *control.cancel.borrow() { return Err("The selected SSH host is offline.".into()); }
+        (control.connection.clone().ok_or("SSH is not ready.")?, control.cancel.subscribe())
+    };
+    let (cancel, read_cancel) = watch::channel(false);
+    let reads = state.observer_reads.clone();
+    {
+        let mut reads = reads.lock().map_err(|_| "Observer state unavailable.")?;
+        if reads.contains_key(&request_id) { return Err("This Observer request is already active.".into()); }
+        if reads.len() >= 16 { return Err("Wait for previous Observer reads to finish.".into()); }
+        reads.insert(request_id.clone(), cancel);
+    }
+    tauri::async_runtime::spawn(async move {
+        let result = perform_observer_read(&connection, &mut session_cancel, &read_cancel, kind).await;
+        if let Ok(mut reads) = reads.lock() { reads.remove(&request_id); }
+        if *read_cancel.borrow() { return; }
+        let event = match result { Ok(result) => ObserverEvent::Result { result }, Err(message) => ObserverEvent::Error { message } };
+        let _ = on_event.send(event);
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_observer_cancel(request_id: String, state: State<'_, SshState>) -> Result<(), String> {
+    let reads = state.observer_reads.lock().map_err(|_| "Observer state unavailable.")?;
+    if let Some(cancel) = reads.get(&request_id) { let _ = cancel.send(true); }
+    Ok(())
+}
+
+async fn perform_observer_read(connection: &SshHandle, session_cancel: &mut watch::Receiver<bool>, cancel: &watch::Receiver<bool>, kind: ObserverReadKind) -> Result<ObserverResult, String> {
+    match kind {
+        ObserverReadKind::Hardware => {
+            let linux = read_ssh_text(connection, session_cancel, Some(cancel.clone()), OBSERVER_LINUX).await;
+            if *cancel.borrow() { return Err("Observer read cancelled.".into()); }
+            if let Ok(linux) = linux {
+                let probe = format!("if command -v nvidia-smi >/dev/null 2>&1; then {OBSERVER_GPU}; fi");
+                let gpu = read_ssh_text(connection, session_cancel, Some(cancel.clone()), &probe).await;
+                let (gpu, warning) = match gpu { Ok(data) => (if data.trim().is_empty() { None } else { Some(data) }, None), Err(error) => (None, Some(error)) };
+                Ok(ObserverResult::Hardware { linux: Some(linux), gpu, warning })
+            } else {
+                let gpu = read_ssh_text(connection, session_cancel, Some(cancel.clone()), OBSERVER_GPU).await
+                    .map_err(|error| format!("Linux telemetry is unavailable and the NVIDIA query failed. {error}"))?;
+                Ok(ObserverResult::Hardware { linux: None, gpu: Some(gpu), warning: None })
+            }
+        }
+        ObserverReadKind::Fleet => Ok(ObserverResult::Fleet { data: read_ssh_text(connection, session_cancel, Some(cancel.clone()), OBSERVER_FLEET).await? }),
+        ObserverReadKind::Tasks => Ok(ObserverResult::Tasks { data: read_ssh_text(connection, session_cancel, Some(cancel.clone()), OBSERVER_TASKS).await? }),
+    }
+}
+
+#[tauri::command]
+pub fn ssh_burrow_listen(session_id: String, listener_id: String, on_event: Channel<BurrowEvent>, state: State<'_, SshState>) -> Result<(), String> {
+    if listener_id.is_empty() || listener_id.len() > 128 { return Err("Invalid Burrow listener ID.".into()); }
+    let (connection, session_cancel) = {
+        let sessions = state.sessions.lock().map_err(|_| "SSH state unavailable.")?;
+        let control = sessions.get(&session_id).ok_or("Connect a VPS terminal before monitoring Burrow.")?;
+        if !control.ready.load(Ordering::Acquire) || *control.cancel.borrow() { return Err("The SSH session is offline.".into()); }
+        (control.connection.clone().ok_or("The SSH session is not ready.")?, control.cancel.subscribe())
+    };
+    let (cancel, listener_cancel) = watch::channel(false);
+    let listeners = state.burrow_listeners.clone();
+    {
+        let mut listeners = listeners.lock().map_err(|_| "Burrow listener state unavailable.")?;
+        if listeners.contains_key(&listener_id) { return Err("This Burrow listener is already open.".into()); }
+        if listeners.len() >= 8 { return Err("Too many Burrow listeners. Close an existing monitor first.".into()); }
+        listeners.insert(listener_id.clone(), BurrowListener { cancel });
+    }
+    tauri::async_runtime::spawn(async move {
+        let result = run_burrow_tail(connection, session_cancel, listener_cancel, &on_event).await;
+        if let Ok(mut listeners) = listeners.lock() { listeners.remove(&listener_id); }
+        let (status, message) = match result { Ok(()) => ("closed", None), Err(error) => ("error", Some(error)) };
+        let _ = on_event.send(BurrowEvent::Status { status, message });
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_burrow_stop(listener_id: String, state: State<'_, SshState>) -> Result<(), String> {
+    let listeners = state.burrow_listeners.lock().map_err(|_| "Burrow listener state unavailable.")?;
+    if let Some(listener) = listeners.get(&listener_id) { let _ = listener.cancel.send(true); }
+    Ok(())
+}
+
+async fn run_burrow_tail(connection: Arc<SshHandle>, mut session_cancel: watch::Receiver<bool>, mut listener_cancel: watch::Receiver<bool>, events: &Channel<BurrowEvent>) -> Result<(), String> {
+    if *session_cancel.borrow() || *listener_cancel.borrow() { return Ok(()); }
+    events.send(BurrowEvent::Status { status: "connecting", message: None }).map_err(|_| "Burrow view closed.")?;
+    let mut channel = tokio::select! {
+        biased;
+        _ = session_cancel.changed() => return Err("SSH disconnected. Reconnect the VPS and retry.".into()),
+        _ = listener_cancel.changed() => return Ok(()),
+        result = timeout(IO_TIMEOUT, connection.channel_open_session()) => result
+            .map_err(|_| "Opening the Burrow stream timed out.")?.map_err(|_| "The server refused a Burrow SSH channel.")?,
+    };
+    let result = async {
+        tokio::select! {
+            biased;
+            _ = session_cancel.changed() => return Err("SSH disconnected. Reconnect the VPS and retry.".into()),
+            _ = listener_cancel.changed() => return Ok(()),
+            result = timeout(IO_TIMEOUT, channel.exec(true, "tail -f -n 15 /root/.hermes/profiles/leveret/a2a_audit.jsonl")) => {
+                result.map_err(|_| "Starting the Burrow stream timed out.")?.map_err(|_| "Could not start the Burrow stream.")?;
+            }
+        }
+        let mut acknowledged = false;
+        let mut stderr = Vec::new();
+        let deadline = tokio::time::sleep(IO_TIMEOUT);
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                biased;
+                _ = session_cancel.changed() => return Err("SSH disconnected. Reconnect the VPS and retry.".into()),
+                _ = listener_cancel.changed() => return Ok(()),
+                _ = &mut deadline, if !acknowledged => return Err("The server did not acknowledge the Burrow stream.".into()),
+                message = channel.wait() => match message {
+                    Some(ChannelMsg::Success) => {
+                        acknowledged = true;
+                        events.send(BurrowEvent::Status { status: "monitoring", message: None }).map_err(|_| "Burrow view closed.")?;
+                    }
+                    Some(ChannelMsg::Data { data }) => {
+                        // Preserve bytes across IPC; TextDecoder handles split UTF-8 in the UI.
+                        events.send(BurrowEvent::Data { data: data.to_vec() }).map_err(|_| "Burrow view closed.")?;
+                    }
+                    Some(ChannelMsg::ExtendedData { data, .. }) => stderr.extend_from_slice(&data[..data.len().min(4096_usize.saturating_sub(stderr.len()))]),
+                    Some(ChannelMsg::ExitStatus { exit_status }) => return Err(format!("Burrow tail ended (status {exit_status}). {}", String::from_utf8_lossy(&stderr).trim())),
+                    Some(ChannelMsg::Failure) | Some(ChannelMsg::ExitSignal { .. }) => return Err("The server rejected or terminated the Burrow stream.".into()),
+                    Some(ChannelMsg::Close) | Some(ChannelMsg::Eof) | None => return Err(format!("The Burrow stream closed. {}", String::from_utf8_lossy(&stderr).trim())),
+                    _ => {}
+                }
+            }
+        }
+    }.await;
+    // Closing only this exec channel terminates tail without touching the terminal PTY.
+    let _ = timeout(Duration::from_secs(2), channel.close()).await;
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn observer_ingestion_is_limited_to_fixed_read_only_commands() {
+        assert!(OBSERVER_FLEET.starts_with("sqlite3 -readonly -json "));
+        assert!(OBSERVER_TASKS.contains("LIMIT 25"));
+        assert!(OBSERVER_GPU.contains("--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu"));
+        assert!(serde_json::from_str::<ObserverReadKind>("\"hardware\"").is_ok());
+        assert!(serde_json::from_str::<ObserverReadKind>("\"arbitrary-shell-command\"").is_err());
+    }
+
+    #[tokio::test]
+    async fn observer_cancel_wakes_a_waiting_read() {
+        let (cancel, receiver) = watch::channel(false);
+        let mut request = Some(receiver);
+        cancel.send(true).unwrap();
+        timeout(Duration::from_secs(1), wait_for_read_cancel(&mut request)).await.unwrap();
+    }
 
     #[test]
     fn dropping_connection_guard_closes_a_socket_retained_by_the_protocol_task() {
@@ -434,8 +725,8 @@ mod tests {
         let ready = Arc::new(AtomicBool::new(false));
         {
             let mut sessions = state.sessions.lock().unwrap();
-            sessions.insert("first".into(), SessionControl { tx: first_tx, cancel: cancel.clone(), ready: ready.clone() });
-            sessions.insert("second".into(), SessionControl { tx: second_tx, cancel, ready: Arc::new(AtomicBool::new(true)) });
+            sessions.insert("first".into(), SessionControl { tx: first_tx, cancel: cancel.clone(), ready: ready.clone(), connection: None, burrow_slot: Arc::new(Semaphore::new(1)) });
+            sessions.insert("second".into(), SessionControl { tx: second_tx, cancel, ready: Arc::new(AtomicBool::new(true)), connection: None, burrow_slot: Arc::new(Semaphore::new(1)) });
         }
         assert!(queue_command(&state, "first", SessionCommand::Write("secret\r".into())).is_err());
         assert!(first_rx.try_recv().is_err());
@@ -486,5 +777,20 @@ mod tests {
             assert!(validate_host(host, 22).is_err(), "{host}");
         }
         assert!(validate_host("example.com", 0).is_err());
+    }
+
+    #[test]
+    fn burrow_resolves_task_ids_without_shell_or_path_injection() {
+        let lookup = burrow_lookup_command("task-ABC_123").unwrap();
+        assert!(lookup.contains("grep -l -E --"));
+        assert!(lookup.contains(r#""task_id"[[:space:]]*:[[:space:]]*"task-ABC_123""#));
+        assert_eq!(burrow_file_command("/root/.hermes/profiles/leveret/a2a_conversations/ctx-123.jsonl").unwrap(), "cat -- '/root/.hermes/profiles/leveret/a2a_conversations/ctx-123.jsonl'");
+        for value in ["", "task-", "../secret", "/etc/passwd", "task-x;id", "$(id)", "task-x\nwhoami", "task-x'", "task-x.jsonl", "task-x with spaces"] {
+            assert!(burrow_lookup_command(value).is_err(), "{value}");
+        }
+        assert!(burrow_lookup_command(&format!("task-{}", "a".repeat(161))).is_err());
+        for path in ["/etc/passwd", "/root/.hermes/profiles/leveret/a2a_conversations/../secret.jsonl", "/root/.hermes/profiles/leveret/a2a_conversations/task-123.jsonl", "/root/.hermes/profiles/leveret/a2a_conversations/ctx-x';id.jsonl", "/root/.hermes/profiles/leveret/a2a_conversations/ctx-x.jsonl\n/etc/passwd"] {
+            assert!(burrow_file_command(path).is_err(), "{path}");
+        }
     }
 }

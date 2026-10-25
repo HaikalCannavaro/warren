@@ -1,0 +1,101 @@
+/* Warren Dark uses the original stylesheet. Terracotta is an explicit light palette. */
+:root { --menu-icon: #6BE2C4; }
+.app-shell svg,.dialog svg,.burrow-detail svg { color: var(--menu-icon); }
+.app-shell .button.primary svg,.app-shell .button.danger svg,.dialog .button.primary svg,.dialog .button.danger svg,.send-button svg { color: inherit; }
+.brand-theme-symbol { display: none; }
+[data-theme="terracotta"] .brand-symbol { display: none; }
+[data-theme="terracotta"] .brand-theme-symbol { display: block; width: 36px; height: 36px; flex-shrink: 0; background: #315B8C; mask: url('/brand/warren-mark.svg?v=2') center/contain no-repeat; }
+.main-nav .nav-item>svg,.bottom-nav>button>svg,.page-heading-icon>svg,.settings-card-title>svg,.connection-section-heading svg,.profile-icon>svg,.server-avatar>svg,.vault-icon>svg,.hermes-mark>svg,.burrow-sigil>svg,.help-content>div>svg { color: var(--menu-icon); }
+.theme-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
+.theme-choice { padding: 10px; min-width: 0; text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+.theme-choice.selected { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+.theme-choice-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 12px; font-size: 11px; }.theme-choice-title>svg { color: var(--menu-icon); }
+.theme-choice-description { display: block; margin-top: 6px; color: var(--muted); font-size: 9px; line-height: 1.7; }
+.theme-swatches { display: flex; gap: 5px; margin-top: 11px; }.theme-swatches i { width: 14px; height: 14px; border: 1px solid #80808035; border-radius: 50%; }
+.theme-preview { display: flex; gap: 8px; height: 74px; border: 1px solid #80808022; border-radius: 5px; padding: 9px; background: #0c131f; }.theme-preview-sidebar { width: 21%; border-radius: 2px; background: #152031; }.theme-preview-main { flex: 1; padding-top: 4px; }.theme-preview-main i { display: block; width: 85%; height: 6px; border-radius: 2px; margin-bottom: 8px; background: #233044; }.theme-preview-main i:first-child { width: 42%; background: #6be2c4; }.theme-preview-main i:last-child { width: 65%; }
+.theme-preview-terracotta { background: #F5EBDD; }.theme-preview-terracotta .theme-preview-sidebar { background: #315B8C; }.theme-preview-terracotta .theme-preview-main i { background: #41333326; }.theme-preview-terracotta .theme-preview-main i:first-child { background: #F2765E; }
+.theme-persistence-note { margin-top: 16px; color: var(--muted); font-size: 9px; line-height: 1.7; }
+
+:root[data-theme="terracotta"] {
+  color-scheme: light; color: #413333; background: #F5EBDD;
+  --bg: #F5EBDD; --surface: #FCF6ED; --surface-raised: #FFF9F2;
+  --line: #DECDBD; --muted: #78645B; --faint: #927D70; --text: #413333;
+  --teal: #F2765E; --teal-dim: #F8DED0; --teal-dark: #63372E; --danger: #A34236;
+  --warm-blue: #315B8C; --warm-paper: #FCF6ED; --warm-raised: #FFF9F2;
+  --menu-icon: #315B8C;
+}
+[data-theme="terracotta"] ::selection { background: #F2765E55; color: #413333; }
+[data-theme="terracotta"] input[type="range"],[data-theme="terracotta"] input[type="checkbox"] { accent-color: #F2765E; }
+[data-theme="terracotta"] .font-sample>i { background: #F2765E; }
+[data-theme="terracotta"] .execution-entry::before { background: #315B8C; }
+[data-theme="terracotta"] .execution-entry.kind-error::before { background: #F2765E; }
+[data-theme="terracotta"] ::-webkit-scrollbar-thumb { background: #C5AFA0; }[data-theme="terracotta"] ::-webkit-scrollbar-thumb:hover { background: #A78D7D; }
+[data-theme="terracotta"] :is(h1,h2,h3,strong) { color: #413333; }
+[data-theme="terracotta"] p { color: #78645B; }
+[data-theme="terracotta"] :is(a,.text-link,.brand-period,.heading-dot) { color: #315B8C; }
+[data-theme="terracotta"] :is(.app-sidebar,.topbar,.bottom-nav) { background: #EFE2D1; border-color: #DECDBD; }
+[data-theme="terracotta"] :is(.brand,.desktop-breadcrumb>strong,.mobile-brand,.nav-item.active,.settings-card-title h2) { color: #413333; }
+[data-theme="terracotta"] :is(.nav-caption,.sidebar-footer,.eyebrow,.page-heading .eyebrow) { color: #876C5D; }
+[data-theme="terracotta"] :is(.nav-item,.sidebar-help,.icon-button,.local-pill,.desktop-breadcrumb,.sidebar-footer small) { color: #78645B; }
+[data-theme="terracotta"] :is(.nav-item:hover,.icon-button:hover:not(:disabled),.sidebar-help:hover) { background: #E4D4C2; color: #413333; }
+[data-theme="terracotta"] .nav-item.active { background: #F2765E25; }.nav-item.active::before { background: var(--teal); }
+[data-theme="terracotta"] :is(.nav-count,.count-badge,.subtle-tag) { background: #315B8C12; border-color: #315B8C25; color: #315B8C; }
+[data-theme="terracotta"] :is(.sidebar-bottom,.sidebar-footer,.local-security,.lock-button,.workspace-footnote) { border-color: #DECDBD; }
+[data-theme="terracotta"] :is(.local-security,.workspace-footnote,.status-dot.connected) { color: #315B8C; }
+[data-theme="terracotta"] .status-dot.connected { background: #315B8C; box-shadow: 0 0 7px #315B8C20; }
+[data-theme="terracotta"] :is(.page-heading-icon,.burrow-sigil,.host-key-icon,.vault-icon,.profile-icon,.server-avatar,.message-avatar,.hermes-mark) { color: #315B8C; border-color: #315B8C2b; background: #315B8C10; box-shadow: none; }
+[data-theme="terracotta"] :is(.panel,.profile-card,.settings-card,.settings-about,.dialog,.vault-card,.hermes-workspace,.terminal-workspace,.execution-panel-shell) { color: #413333; background: #FCF6ED; border-color: #DECDBD; box-shadow: 0 8px 26px #41333306; }
+[data-theme="terracotta"] :is(.terminal-tabs,.terminal-statusbar,.terminal-keybar,.conversation-sidebar,.chat-topbar,.code-header,.session-info,.settings-card-footer,.dialog-heading,.dialog-actions,.execution-panel-heading,.composer-area,.hermes-workspace .composer-area) { background: #F0E4D5; border-color: #DECDBD; color: #78645B; }
+[data-theme="terracotta"] :is(.terminal-pane,.xterm-shell,.xterm-container,.terminal-empty,.chat-empty,.chat-messages,.chat-main,.vault-screen) { background: #F5EBDD; color: #413333; }
+[data-theme="terracotta"] :is(.session-tab,.profile-pick,.conversation-item,.setting-row select,.font-control output,.segmented,.profile-form .transport-select) { color: #78645B; background: #F5EBDD; border-color: #DECDBD; }
+[data-theme="terracotta"] :is(.session-tab.active,.conversation-item.selected,.profile-pick:hover,.segmented>button.selected) { color: #315B8C; background: #315B8C12; border-color: #315B8C35; }
+[data-theme="terracotta"] :is(.session-host,.terminal-statusbar,.terminal-statusbar>span,.session-tab>.status-dot+span,.chat-identity small,.message-byline time,.connection-section-heading>span,.settings-about dt,.settings-about dd,.profile-card p,.profile-card small,.chat-empty-foot p,.composer-caption,.execution-entry-time,.execution-entry-text,.setting-row label>span,.setting-row>div>span) { color: #78645B; }
+[data-theme="terracotta"] :is(.button.primary,.send-button) { background: #F2765E; border-color: #E66A52; color: #413333; box-shadow: none; }
+[data-theme="terracotta"] .button.primary:hover:not(:disabled) { background: #F58B75; border-color: #E66A52; }
+[data-theme="terracotta"] :is(.button.secondary,.terminal-keybar>button,.add-dashed,.add-profile-card,.add-profile-icon) { color: #315B8C; background: #315B8C09; border-color: #315B8C35; }
+[data-theme="terracotta"] :is(.button.secondary:hover:not(:disabled),.terminal-keybar>button:hover:not(:disabled),.add-dashed:hover,.add-profile-card:hover) { color: #315B8C; background: #315B8C16; border-color: #315B8C66; }
+[data-theme="terracotta"] :is(.button.danger,.button.danger:hover) { color: #FFF9F2; background: #A34236; border-color: #A34236; }
+[data-theme="terracotta"] :is(.profile-form input,.profile-form textarea,.vault-card input,.chat-composer,.font-sample,.paste-preview,.fingerprint-value,.code-block,.markdown pre,.markdown code,.command-result) { color: #413333; background: #FFF9F2; border-color: #D8C6B4; }
+[data-theme="terracotta"] :is(input,textarea,select)::placeholder { color: #9B8576; }
+[data-theme="terracotta"] :is(.profile-form label,.field-label,.vault-card label,.chat-composer textarea,.font-sample>span,.markdown,.markdown pre code,.markdown th,.markdown td) { color: #413333; }
+[data-theme="terracotta"] :is(.profile-form input,.profile-form textarea,.vault-card input,.chat-composer textarea):focus { border-color: #315B8C; box-shadow: 0 0 0 3px #315B8C12; }
+[data-theme="terracotta"] :is(.markdown th,.profile-tags>span,.setup-step>span,.chat-empty-foot>span,.message-user .message-avatar,.profile-icon.hermes) { background: #F2765E15; border-color: #F2765E35; color: #63372E; }
+[data-theme="terracotta"] :is(.markdown th,.markdown td,.markdown hr,.chat-composer,.keybar-divider,.conversation-sidebar,.execution-entry,.execution-status,.setting-row,.profile-card,.profile-card-footer) { border-color: #DECDBD; }
+[data-theme="terracotta"] :is(.hermes-workspace .message-body,.hermes-workspace .message-user .message-body) { background: #FFF9F2; border-color: #DECDBD; color: #413333; }
+[data-theme="terracotta"] .hermes-workspace .message-user .message-body { background: #315B8C0C; border-color: #315B8C22; }
+[data-theme="terracotta"] :is(.getting-started,.hermes-teaser,.terminal-illustration,.illustration-top,.illustration-badge) { background: #F0E4D5; border-color: #DECDBD; box-shadow: none; }
+[data-theme="terracotta"] .illustration-lines i { background: #BCA68E; }[data-theme="terracotta"] .illustration-cursor { background: #315B8C; }
+[data-theme="terracotta"] :is(.preview-banner,.test-result,.update-status,.update-release,.execution-status,.execution-entry.kind-tool .execution-entry-text,.activity-toggle[aria-expanded="true"]) { color: #315B8C; background: #315B8C0C; border-color: #315B8C25; }
+[data-theme="terracotta"] :is(.global-error,.inline-error,.terminal-error,.update-status-error,.execution-status.status-error) { color: #923C30; background: #F2765E18; border-color: #F2765E55; }
+[data-theme="terracotta"] :is(.inline-warning,.update-status-permissionRequired,.execution-status.status-unknown) { color: #86591F; background: #F2765E12; border-color: #D3AA7777; }
+[data-theme="terracotta"] .dialog-backdrop { background: #41333355; }
+[data-theme="terracotta"] :is(.setting-row>.language-switch,.slash-menu,.slash-menu-category-header,.slash-menu-error>button) { background: #FCF6ED; border-color: #DECDBD; color: #78645B; }
+[data-theme="terracotta"] :is(.language-switch button,.slash-menu button) { color: #78645B; }
+[data-theme="terracotta"] :is(.language-switch button[aria-pressed="true"],.language-switch button:hover,.slash-menu-section>button[aria-selected="true"],.slash-menu-section>button:not(:disabled):hover) { background: #315B8C14; color: #315B8C; }
+[data-theme="terracotta"] .bottom-nav>button { color: #78645B; }[data-theme="terracotta"] .bottom-nav>button.active { color: #315B8C; }[data-theme="terracotta"] .bottom-nav>button.active::before { background: #F2765E; }
+
+/* The A2A reader and its portal drawer share the same theme as the workspace. */
+[data-theme="terracotta"] :is(.burrow-workspace,.burrow-detail) { --edge: #DECDBD; --dim: #927D70; background: #F5EBDD; border-color: #D7C3AE; box-shadow: 0 12px 42px #41333309; color: #413333; }
+[data-theme="terracotta"] .burrow-console-header { background: radial-gradient(ellipse at 2% 0%,#F2765E14,transparent 65%),#FCF6ED; border-color: #DECDBD; }
+[data-theme="terracotta"] :is(.burrow-toolbar,.burrow-stream-heading,.burrow-console-footer,.burrow-detail-heading,.burrow-detail-tools,.burrow-detail-footer) { background: #F0E4D5; color: #78645B; border-color: #DECDBD; }
+[data-theme="terracotta"] :is(.burrow-console-title h1,.burrow-summary p,.burrow-markdown,.burrow-markdown h1,.burrow-markdown h2,.burrow-markdown h3,.burrow-empty h3,.burrow-connection-state h3) { color: #413333; }
+[data-theme="terracotta"] :is(.burrow-console-title h1>span,.burrow-detail-heading h2) { color: #315B8C; }
+[data-theme="terracotta"] :is(.burrow-overline,.burrow-console-title p,.burrow-source-picker,.burrow-peer-filter,.burrow-log-gutter time,.burrow-event-direction,.burrow-log-meta>code,.burrow-log-meta button,.burrow-stream-heading>span:last-child,.burrow-summary-caption,.burrow-turn-byline time,.burrow-detail-tools>code,.burrow-empty p,.burrow-connection-state p) { color: #856E60; }
+[data-theme="terracotta"] :is(.burrow-source-picker select,.burrow-peer-filter select,.burrow-control,.burrow-monitor-pill,.burrow-source-label) { background: #FCF6ED; color: #78645B; border-color: #D7C3AE; }
+[data-theme="terracotta"] :is(.burrow-control.active,.burrow-monitor-pill.monitoring) { color: #315B8C; background: #315B8C0D; border-color: #315B8C35; }
+[data-theme="terracotta"] .burrow-control.active small { color: #315B8C; }
+[data-theme="terracotta"] .burrow-stream { background-image: linear-gradient(#41333304 1px,transparent 1px); }
+[data-theme="terracotta"] .burrow-log-item { border-color: #DECDBD; }
+[data-theme="terracotta"] :is(.burrow-summary,.burrow-bubble,.burrow-markdown pre) { background: #FFF9F2; border-color: #DECDBD; }
+[data-theme="terracotta"] .burrow-turn.orchestrator .burrow-bubble { background: #315B8C0A; border-color: #315B8C33; }
+[data-theme="terracotta"] .burrow-turn.with-evidence .burrow-bubble { border-color: #8C9D6B77; }
+[data-theme="terracotta"] .burrow-markdown code { background: #315B8C0A; color: #315B8C; }[data-theme="terracotta"] .burrow-markdown pre code { background: transparent; color: #413333; }
+[data-theme="terracotta"] :is(.burrow-markdown th,.burrow-markdown td) { border-color: #DECDBD; }[data-theme="terracotta"] .burrow-markdown th { background: #EFE2D1; color: #413333; }
+[data-theme="terracotta"] .burrow-markdown blockquote { background: #315B8C09; border-color: #315B8C77; color: #78645B; }
+[data-theme="terracotta"] :is(.peer-leveret,.peer-radar) { color: #315B8C; }[data-theme="terracotta"] .peer-forge { color: #2B6B4D; }[data-theme="terracotta"] .peer-atlas { color: #8F651D; }[data-theme="terracotta"] .peer-sentinel { color: #A34236; }[data-theme="terracotta"] :is(.peer-lens,.peer-aurora,.peer-prism) { color: #7F4C77; }[data-theme="terracotta"] .peer-quant { color: #647434; }[data-theme="terracotta"] .peer-unknown { color: #78645B; }
+[data-theme="terracotta"] :is(.burrow-status.completed,.burrow-inline-status.completed,.burrow-copy-feedback) { color: #315B8C; background: #315B8C0E; }[data-theme="terracotta"] :is(.burrow-status.running,.burrow-inline-status.running,.burrow-warning) { color: #63372E; background: #F2765E0E; }[data-theme="terracotta"] :is(.burrow-status.failed,.burrow-inline-status.failed,.burrow-error) { color: #A34236; background: #F2765E18; }
+[data-theme="terracotta"] .burrow-section-label,[data-theme="terracotta"] .burrow-section-label.verification { background: #315B8C0E; border-color: #315B8C44; color: #315B8C; }[data-theme="terracotta"] .burrow-message-tags { border-color: #DECDBD; }[data-theme="terracotta"] .burrow-message-tags>span { color: #315B8C; }
+[data-theme="terracotta"] :is(.burrow-markdown .hljs-keyword,.burrow-markdown .hljs-selector-tag,.burrow-markdown .hljs-literal) { color: #315B8C; }[data-theme="terracotta"] :is(.burrow-markdown .hljs-string,.burrow-markdown .hljs-regexp,.burrow-markdown .hljs-addition) { color: #63372E; }[data-theme="terracotta"] :is(.burrow-markdown .hljs-title,.burrow-markdown .hljs-function,.burrow-markdown .hljs-built_in) { color: #315B8C; }[data-theme="terracotta"] :is(.burrow-markdown .hljs-comment,.burrow-markdown .hljs-quote) { color: #927D70; }[data-theme="terracotta"] :is(.burrow-markdown .hljs-number,.burrow-markdown .hljs-attr) { color: #A34236; }
+[data-theme="terracotta"] .burrow-monitor-pill.monitoring>span { box-shadow: 0 0 8px #315B8C44; }[data-theme="terracotta"] .burrow-footer-protocol>span.live { background: #315B8C; }
+[data-theme="terracotta"] .burrow-detail-backdrop { background: #41333366; }[data-theme="terracotta"] .burrow-connection-orbit { color: #315B8C; background: #315B8C08; border-color: #315B8C33; box-shadow: 0 0 0 8px #315B8C08,0 0 0 16px #315B8C04; }
+@media(max-width:430px) { .theme-choices { gap: 10px; }.theme-choice { padding: 9px; }.theme-choice-title { font-size: 10px; }.theme-choice-description { font-size: 8px; }.theme-preview { height: 62px; } }

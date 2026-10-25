@@ -19,6 +19,13 @@ it('hides and restores Warren navigation without replacing the active terminal o
     streamingIds: new Set(), toolActivity: {}, hostPrompt: null, closeSession: mock.disconnect, lock: mock.lock,
   });
   render(<App/>);
+  expect(screen.getByRole('heading', { name: /^Observer\s*\.$/ })).toBeTruthy();
+  for (const name of ['Navigasi utama', 'Navigasi seluler']) {
+    const buttons = within(screen.getByRole('navigation', { name })).getAllByRole('button');
+    expect(buttons[0].textContent).toBe('Observer');
+    expect(buttons[0].getAttribute('aria-current')).toBe('page');
+  }
+  fireEvent.click(screen.getAllByRole('button', { name: /^Terminal/ })[0]);
   const terminal = screen.getByLabelText('Terminal test buffer');
   fireEvent.change(terminal, { target: { value: 'keep my terminal buffer' } });
   fireEvent.click(screen.getByRole('button', { name: 'Sembunyikan sidebar Warren' }));
@@ -43,6 +50,7 @@ it('switches the interface language in Settings without replacing terminal state
     closeSession: mock.disconnect, lock: mock.lock,
   });
   render(<App/>);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Terminal' })[0]);
   const terminal = screen.getByLabelText('Terminal test buffer');
   fireEvent.change(terminal, { target: { value: 'keep session output' } });
   expect(screen.queryByText(/Personal workspace|Mode pratinjau|Browser preview|^PREVIEW$/)).toBeNull();
@@ -74,6 +82,7 @@ it('retains the Agent composer and terminal through navigation links, both menus
     closeSession: mock.disconnect, lock: mock.lock, openConversation, setDraft: vi.fn(),
   });
   render(<App/>);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Terminal' })[0]);
   const terminal = screen.getByLabelText('Terminal test buffer');
   const page = screen.getByRole('main');
   fireEvent.change(terminal, { target: { value: 'Retained server output' } });

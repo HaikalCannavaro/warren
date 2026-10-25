@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getTheme, terminalTheme, useTheme } from '../lib/theme';
+import { attachTerminalTouchScroll } from '../lib/terminalTouch';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ClipboardPaste, Command, CornerDownLeft, Plus, Server, ShieldCheck, TerminalSquare, X } from 'lucide-react';
@@ -41,6 +43,7 @@ export function TerminalWorkspace({ sessions, activeSessionId, profiles, setting
 }
 
 function TerminalPane({ session, settings, visible, selected, subscribeTerminal, writeTerminal, resizeTerminal }: TerminalActions & { session: TerminalSession; settings: Settings; visible: boolean; selected: boolean }) {
+  const theme = useTheme();
   const { t } = useI18n();
   const statusLabels: Record<TerminalSession['status'], string> = { connecting: t('Connecting', 'Menghubungkan'), connected: t('Connected', 'Terhubung'), disconnected: t('Disconnected', 'Terputus'), error: t('Connection failed', 'Gagal terhubung') };
   const container = useRef<HTMLDivElement>(null);
@@ -77,10 +80,11 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
   useEffect(() => {
     const element = container.current;
     if (!element) return;
-    const term = new Terminal({ cursorBlink: true, fontSize: settings.fontSize, fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace', scrollback: settings.scrollback, convertEol: false, allowProposedApi: false, theme: { background: '#0b121d', foreground: '#d4dce8', cursor: '#6ee7cb', cursorAccent: '#0b121d', selectionBackground: '#27594f', black: '#17202d', red: '#f58b94', green: '#7adbb2', yellow: '#ead18d', blue: '#83adf2', magenta: '#c4a0ed', cyan: '#7ed3de', white: '#dce4f0', brightBlack: '#637086', brightRed: '#ff9da5', brightGreen: '#a3edc9', brightYellow: '#f1dfad', brightBlue: '#a5c6ff', brightMagenta: '#d8baf7', brightCyan: '#a4e8ef', brightWhite: '#f3f6fc' } });
+    const term = new Terminal({ cursorBlink: true, fontSize: settings.fontSize, fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace', scrollback: settings.scrollback, convertEol: false, allowProposedApi: false, theme: terminalTheme(getTheme()) });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(element);
+    const detachTouchScroll = attachTerminalTouchScroll(element, term);
     terminal.current = term;
     fit.current = fitAddon;
     const unregisterTerminal = registerTerminal(session.id, term);
@@ -95,6 +99,7 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
     const interceptPaste = (event: ClipboardEvent) => { event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); const value = event.clipboardData?.getData('text/plain'); if (value) setPaste(value); };
     element.addEventListener('paste', interceptPaste, true);
     return () => {
+      detachTouchScroll();
       unregisterTerminal();
       incoming();
       outgoing.dispose();
@@ -111,6 +116,7 @@ function TerminalPane({ session, settings, visible, selected, subscribeTerminal,
   }, [session.id]);
   useEffect(() => { if (terminal.current) { terminal.current.options.fontSize = settings.fontSize; terminal.current.options.scrollback = settings.scrollback; } if (visible && container.current?.clientWidth) fitTerminal(); }, [settings.fontSize, settings.scrollback, visible, fitTerminal]);
   useEffect(() => { if (!visible) return; const frame = requestAnimationFrame(() => { if (container.current?.clientWidth) { fitTerminal(); terminal.current?.focus(); if (session.status === 'connected' && terminal.current) void latest.current.resizeTerminal(session.id, terminal.current.cols, terminal.current.rows).catch((cause) => setError(String(cause))); } }); return () => cancelAnimationFrame(frame); }, [visible, session.status, session.id, fitTerminal]);
+  useEffect(() => { if (terminal.current) terminal.current.options.theme = terminalTheme(theme); }, [theme]);
   const sendKey = (data: string) => { if (session.status === 'connected') void writeTerminal(session.id, data).catch((cause) => setError(String(cause))); terminal.current?.focus(); };
   return <div id={`session-panel-${session.id}`} role="tabpanel" aria-labelledby={`session-tab-${session.id}`} className="terminal-pane" style={{ display: selected ? 'flex' : 'none' }}>
     <div className="session-info"><span className={`status-dot ${session.status}`}/><span>{statusLabels[session.status]}</span><span className="session-host">{session.host}</span></div>

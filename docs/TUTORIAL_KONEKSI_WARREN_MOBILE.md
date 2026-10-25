@@ -1,5 +1,5 @@
 # Panduan Lengkap Koneksi & Integrasi Warren Mobile (Real Environment)
-**Data Asli: URL Cloudflare Tunnel, Tailscale IP, API Key & Kredensial Nyata**
+**Data Asli: URL Cloudflare Tunnel, Tailscale IP, API Key & Gateway WebSocket**
 
 Dokumen ini berisi parameter koneksi **aktual dan terverifikasi** untuk menghubungkan aplikasi **Warren** ke seluruh layanan di VPS (`Hcnnvr-studio`) dan Windows PC (`haikalcannavaro`).
 
@@ -7,24 +7,38 @@ Dokumen ini berisi parameter koneksi **aktual dan terverifikasi** untuk menghubu
 
 ## 1. Koneksi Agent Chat (Tab "Agents") — 100% Verified
 
-Warren dapat terhubung langsung ke agen **Leveret** (Master Orchestrator yang mengendalikan seluruh armada A2A dan toolset) melalui endpoint REST OpenAI-compatible berlatensi rendah:
+Anda memiliki 2 opsi koneksi resmi untuk terhubung langsung ke agen **Leveret** (Master Orchestrator):
 
-### Parameter Form Koneksi Agen:
+### OPSI A: Gateway (WebSocket) — Mode Tercepat & Real-time (Rekomendasi Utama)
+Mode ini menggunakan koneksi persisten WebSocket dua arah dengan protokol resmi `hermes-gateway-v1` dan `durable-admission-v1`:
 * **Nama Koneksi / Profil**: `Leveret`
-* **Jenis Koneksi (Transport)**: `HTTP · Kompatibel OpenAI` (`openai`)
-* **URL Server**:
-  * **Jalur Publik (Cloudflare Tunnel)**:  
-    `https://leveret.unlessrabbit.my.id/v1`
+* **Jenis Koneksi (Transport)**: `Gateway` (WebSocket)
+* **Gateway URL**:
+  * **Jalur Publik (Cloudflare Tunnel WSS)**:  
+    `wss://leveret.unlessrabbit.my.id/api/ws`
   * **Jalur Privat (Tailscale Mesh)**:  
-    `http://100.65.133.127:8642/v1`
-* **API Token**:  
+    `ws://100.65.133.127:8640/api/ws`
+* **Gateway Token**:  
   `6f421c87eac3cbe4e987e1db24e2139e`
 * **Model**:  
   `leveret`
 * **Execution Node**: `Hcnnvr-studio`
 
 > **Status Uji Coba**:  
-> Endpoint `https://leveret.unlessrabbit.my.id/v1/chat/completions` sudah diuji via cURL dengan token di atas dan mengembalikan respons `HTTP 200 OK` secara instan.
+> Endpoint `wss://leveret.unlessrabbit.my.id/api/ws` sudah diuji langsung dengan token di atas. Berhasil menerima handshake `gateway.ready`, lulus validasi `session_authority: true`, dan berhasil membuat sesi chat dengan kapabilitas `durable-admission-v1`.
+
+---
+
+### OPSI B: HTTP · Kompatibel OpenAI (REST Streaming)
+* **Nama Koneksi / Profil**: `Leveret`
+* **Jenis Koneksi (Transport)**: `HTTP · Kompatibel OpenAI` (`openai`)
+* **URL Server**:
+  * `https://leveret.unlessrabbit.my.id/v1`
+  * Tailscale: `http://100.65.133.127:8642/v1`
+* **API Token**:  
+  `6f421c87eac3cbe4e987e1db24e2139e`
+* **Model**:  
+  `leveret`
 
 ---
 
@@ -60,7 +74,7 @@ Buka tab **Settings** → **Kanban & A2A connections**:
 * **Kanban Event WebSocket URL**:  
   `wss://hermes.unlessrabbit.my.id/api/plugins/kanban/events`
 * **A2A Cockpit Base URL**:  
-  `https://hermes.unlessrabbit.my.id` (atau port 3450 jika di-tunnel)
+  `https://hermes.unlessrabbit.my.id`
 * **Autentikasi Dashboard**:  
   * **Username**: `hcnnvr`
   * **Password**: Password web dashboard Hermes Anda.
@@ -75,26 +89,14 @@ Buka tab **Settings** → **Kanban & A2A connections**:
 
 ---
 
-## 4. Gateway WebSocket Eksklusif (Jika Memakai Mode Gateway)
+## 4. Ringkasan Cheat-Sheet Cepat Salin-Tempel (WebSocket Mode)
 
-Jika menggunakan mode `Transport: Gateway (WebSocket)` di profil chat:
-* **Endpoint URL**:  
-  `wss://hermes.unlessrabbit.my.id/api/ws`  
-  *(atau via Tailscale: `ws://100.65.133.127:9119/api/ws`)*
-* **Protokol Wire**: `durable-admission-v1`
-* **Token / Ticket**: Menggunakan session ticket yang di-mint dari dashboard auth (`hcnnvr`).
-
----
-
-## 5. Ringkasan Cheat-Sheet Cepat Salin-Tempel
-
-| Layanan | Parameter | Nilai Asli (Tinggal Copy) |
-| :--- | :--- | :--- |
-| **Agent Leveret Chat** | URL Server | `https://leveret.unlessrabbit.my.id/v1` |
-| **Agent Leveret Chat** | API Token | `6f421c87eac3cbe4e987e1db24e2139e` |
-| **Agent Leveret Chat** | Model | `leveret` |
-| **SSH VPS** | Host & Port | `100.65.133.127` : `22` (User: `root`) |
-| **SSH Windows PC** | Host & Port | `100.91.205.20` : `22` (User: Windows Anda) |
-| **Kanban DAG** | Base URL | `https://hermes.unlessrabbit.my.id/api/plugins/kanban` |
-| **Kanban Events** | WebSocket URL | `wss://hermes.unlessrabbit.my.id/api/plugins/kanban/events` |
-| **Dashboard Auth** | Username | `hcnnvr` |
+| Parameter di Warren | Nilai Asli (Tinggal Copy) |
+| :--- | :--- |
+| **Jenis Koneksi** | `Gateway` (WebSocket) |
+| **Gateway URL** | `wss://leveret.unlessrabbit.my.id/api/ws` |
+| **Gateway Token** | `6f421c87eac3cbe4e987e1db24e2139e` |
+| **Model** | `leveret` |
+| **Execution Node** | `Hcnnvr-studio` |
+| **SSH VPS Host** | `100.65.133.127:22` (User: `root`) |
+| **SSH Windows PC** | `100.91.205.20:22` (User: Windows Anda) |

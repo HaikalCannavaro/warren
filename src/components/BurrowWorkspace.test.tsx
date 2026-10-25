@@ -1,0 +1,95 @@
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { BurrowWorkspace } from './BurrowWorkspace';
+import { BurrowTranscript } from './BurrowTranscript';
+import { setLanguage } from '../lib/i18n';
+import type { BurrowStreamEvent } from '../lib/native';
+import type { A2AAuditEntry } from '../lib/burrow';
+import type { TerminalSession, VpsProfile } from '../types';
+
+const mock = vi.hoisted(() => ({ listen: vi.fn(), stop: vi.fn(), read: vi.fn(), handlers: new Map<string, (event: BurrowStreamEvent) => void>() }));
+vi.mock('../lib/native', () => ({ listenBurrow: mock.listen, stopBurrow: mock.stop, readBurrowTranscript: mock.read }));
+const profiles: VpsProfile[] = ['one', 'two'].map(id => ({ id, name: `VPS ${id}`, host: `${id}.example`, port: 22, username: 'root', auth: 'key', password: '', privateKey: '', passphrase: '' }));
+const sessions: TerminalSession[] = ['one', 'two'].map(id => ({ id: `ssh-${id}`, profileId: id, label: `VPS ${id}`, host: `${id}.example`, status: 'connected' }));
+const entry: A2AAuditEntry = { id: 'event-1', ts: 1792899720, direction: 'outbound', peer: 'forge', task_id: 'task-123', summary: 'Audit this.', status: 'working', raw: {} };
+beforeEach(() => {
+  setLanguage('en'); mock.handlers.clear(); mock.listen.mockReset(); mock.stop.mockReset().mockResolvedValue(undefined); mock.read.mockReset();
+  mock.listen.mockImplementation(async (_session: string, id: string, handler: (event: BurrowStreamEvent) => void) => { mock.handlers.set(id, handler); });
+});
+afterEach(cleanup);
+it('lists all saved VPS profiles, switches the selected source and never follows another server after disconnect', async () => {
+  const connect = vi.fn().mockResolvedValue(undefined);
+  const view = render(<BurrowWorkspace profiles={profiles} sessions={sessions} activeSessionId="ssh-one" preview={false} onConnections={vi.fn()} onConnect={connect}/>);
+  const select = screen.getByLabelText('Log source connection');
+  fireEvent.click(select); expect(screen.getAllByRole('option')).toHaveLength(2);
+  expect(mock.listen.mock.calls[0][0]).toBe('ssh-one');
+  const first = mock.listen.mock.calls[0][1];
+  fireEvent.click(screen.getByRole('option', { name: /VPS two/ }));
+  await waitFor(() => expect(mock.listen).toHaveBeenCalledTimes(2));
+  expect(mock.listen.mock.calls[1][0]).toBe('ssh-two');
+  expect(mock.stop).toHaveBeenCalledWith(first);
+  view.rerender(<BurrowWorkspace profiles={profiles} sessions={[sessions[0]]} activeSessionId="ssh-one" preview={false} onConnections={vi.fn()} onConnect={connect}/>);
+  expect(select.textContent).toContain('VPS two');
+  expect(screen.getByText('Connecting to Burrow...')).toBeTruthy();
+  expect(mock.listen).toHaveBeenCalledTimes(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(connect).toHaveBeenCalledWith('two'));
+});
+it('filters peers, expands long context, toggles auto-scroll and clears without restarting the listener', async () => {
+  render(<BurrowWorkspace profiles={profiles} sessions={sessions} activeSessionId="ssh-one" preview={false} onConnections={vi.fn()} onConnect={vi.fn()}/>);
+  const handler = mock.handlers.get(mock.listen.mock.calls[0][1])!;
+  const long = 'Evidence '.repeat(50);
+  act(() => {
+    handler({ type: 'status', status: 'monitoring' });
+    handler({ type: 'data', data: [...new TextEncoder().encode([JSON.stringify({ ...entry, summary: long }), JSON.stringify({ ...entry, task_id: 'task-124', peer: 'atlas', summary: 'Atlas context.' })].join('\n') + '\n')] });
+  });
+  expect(screen.getByText('MONITORING A2A TRAFFIC')).toBeTruthy();
+  fireEvent.click(screen.getByRole('combobox', { name: 'Filter Peer' })); fireEvent.click(screen.getByRole('option', { name: 'Forge' }));
+  expect(screen.queryByText('Atlas context.')).toBeNull();
+  const expand = screen.getByRole('button', { name: 'Expand context' });
+  fireEvent.click(expand); expect(expand.getAttribute('aria-expanded')).toBe('true');
+  const scroll = screen.getByRole('button', { name: 'Toggle Auto-Scroll' });
+  fireEvent.click(scroll); expect(scroll.getAttribute('aria-pressed')).toBe('false');
+  fireEvent.click(screen.getByRole('button', { name: 'Clear Screen' }));
+  expect(screen.queryByText(long.trim())).toBeNull();
+  expect(mock.listen).toHaveBeenCalledTimes(1);
+});
+it('resolves transcripts by task_id, renders Markdown and preserves raw text when copied', async () => {
+  const raw = [JSON.stringify({ role: 'user', content: 'Please investigate.' }), JSON.stringify({ role: 'assistant', content: '## EVIDENCE MANIFEST\n\n| Check | Status |\n|---|---|\n| Gate | PASS |\n\n### Verification\n\n```typescript\nconst verified = true;\n```' })].join('\n');
+  mock.read.mockResolvedValue({ path: '/root/.hermes/profiles/leveret/a2a_conversations/ctx-abc.jsonl', content: raw });
+  const write = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } });
+  const { container } = render(<BurrowTranscript entry={entry} sessionId="ssh-one" onClose={vi.fn()}/>);
+  await screen.findByText('Please investigate.');
+  expect(mock.read).toHaveBeenCalledWith('ssh-one', 'task-123');
+  expect(screen.getByRole('table')).toBeTruthy();
+  expect(container.querySelector('.hljs-keyword')).toBeTruthy();
+  expect(container.querySelector('.burrow-section-label.evidence')).toBeTruthy();
+  expect(container.querySelector('.burrow-section-label.verification')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Copy Raw Transcript' }));
+  await waitFor(() => expect(write).toHaveBeenCalledWith(raw));
+  fireEvent.click(screen.getByRole('button', { name: 'Copy JSON' }));
+  await waitFor(() => expect(write).toHaveBeenCalledWith(JSON.stringify(raw.split('\n').map(line => JSON.parse(line)), null, 2)));
+});
+it('shows a useful empty state when grep finds no conversation for the task', async () => {
+  mock.read.mockResolvedValue({ path: null, content: '' });
+  render(<BurrowTranscript entry={entry} sessionId="ssh-one" onClose={vi.fn()}/>);
+  expect(await screen.findByText('No transcript found')).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Copy JSON' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(mock.read).toHaveBeenCalledTimes(2));
+});
+it('opens a working modal outside the inert feed and restores focus when closed', async () => {
+  mock.read.mockResolvedValue({ path: '/root/.hermes/profiles/leveret/a2a_conversations/ctx-abc.jsonl', content: JSON.stringify({ role: 'user', content: 'Specialist consultation' }) });
+  render(<BurrowWorkspace profiles={profiles} sessions={sessions} activeSessionId="ssh-one" preview={false} onConnections={vi.fn()} onConnect={vi.fn()}/>);
+  const handler = mock.handlers.get(mock.listen.mock.calls[0][1])!;
+  act(() => handler({ type: 'data', data: [...new TextEncoder().encode(JSON.stringify(entry) + '\n')] }));
+  const open = screen.getByRole('button', { name: 'Open transcript for task-123' });
+  open.focus(); fireEvent.click(open);
+  const dialog = await screen.findByRole('dialog');
+  expect(dialog.closest('[inert]')).toBeNull();
+  expect(await within(dialog).findByText('Specialist consultation')).toBeTruthy();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(document.activeElement).toBe(open);
+});

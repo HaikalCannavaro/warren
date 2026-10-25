@@ -2,7 +2,7 @@
   "bundle": {
     "createUpdaterArtifacts": true,
     "android": {
-      "versionCode": 4000
+      "versionCode": 5000
     }
   },
   "plugins": {

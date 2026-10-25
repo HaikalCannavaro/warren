@@ -33,6 +33,43 @@ export async function resizeSsh(sessionId:string,cols:number,rows:number):Promis
 export async function disconnectSsh(sessionId:string):Promise<void> {
   requireNative(); return invoke('ssh_disconnect',{sessionId});
 }
+export type BurrowStreamEvent = {type:'data';data:number[]} | {type:'status';status:'connecting'|'monitoring'|'closed'|'error';message?:string};
+export async function listenBurrow(sessionId:string,listenerId:string,handler:(event:BurrowStreamEvent)=>void):Promise<void> {
+  requireNative(); const onEvent=new Channel<BurrowStreamEvent>(); onEvent.onmessage=handler;
+  return invoke('ssh_burrow_listen',{sessionId,listenerId,onEvent});
+}
+export async function stopBurrow(listenerId:string):Promise<void> {
+  requireNative(); return invoke('ssh_burrow_stop',{listenerId});
+}
+export interface BurrowTranscriptResult { path:string|null; content:string; }
+export async function readBurrowTranscript(sessionId:string,taskId:string):Promise<BurrowTranscriptResult> {
+  requireNative(); return invoke<BurrowTranscriptResult>('ssh_read_burrow',{sessionId,taskId});
+}
+export type ObserverReadKind = 'hardware' | 'fleet' | 'tasks';
+export type ObserverResponse = {kind:'hardware';linux:string|null;gpu:string|null;warning:string|null} | {kind:'fleet'|'tasks';data:string};
+type ObserverWireEvent = {type:'result';result:ObserverResponse} | {type:'error';message:string};
+export function readObserver(sessionId:string,kind:ObserverReadKind,signal?:AbortSignal):Promise<ObserverResponse> {
+  requireNative();
+  if(signal?.aborted)return Promise.reject(new DOMException('Observer read cancelled.','AbortError'));
+  return new Promise((resolve,reject)=>{
+    const requestId=crypto.randomUUID();let settled=false;let cancelled=false;
+    const cancelNative=()=>{void invoke('ssh_observer_cancel',{requestId}).catch(()=>{});};
+    const finish=(result?:ObserverResponse,error?:unknown)=>{
+      if(settled)return;settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);
+      if(error!==undefined)reject(error);else resolve(result!);
+    };
+    const abort=()=>{cancelled=true;cancelNative();finish(undefined,new DOMException('Observer read cancelled.','AbortError'));};
+    const timer=setTimeout(()=>{cancelled=true;cancelNative();finish(undefined,new Error('Observer data read timed out. Retry explicitly.'));},90000);
+    signal?.addEventListener('abort',abort,{once:true});
+    const onEvent=new Channel<ObserverWireEvent>();
+    onEvent.onmessage=event=>{
+      if(event.type==='error')finish(undefined,new Error(event.message));
+      else if(event.result.kind!==kind)finish(undefined,new Error('Observer received data for a different request type.'));
+      else finish(event.result);
+    };
+    void invoke('ssh_observer_start',{sessionId,requestId,kind,onEvent}).then(()=>{if(cancelled)cancelNative();}).catch(error=>finish(undefined,error));
+  });
+}
 export async function probeHermes(url:string,token:string):Promise<HermesCapabilities> {
   requireNative(); return invoke('probe_hermes',{url,token});
 }

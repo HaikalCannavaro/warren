@@ -50,3 +50,13 @@
   .nav-activation-wave { display: none; }
   .main-nav .nav-item, .bottom-nav > button { transition: none; }
 }
+/* Menu identity is shared with the navigation icon for each workspace section. */
+.xterm-container { touch-action: pinch-zoom; overscroll-behavior: contain; }
+.page-heading-identity { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.page-heading-identity>div { min-width: 0; }
+.page-heading-icon { width: 47px; height: 47px; flex-shrink: 0; display: grid; place-items: center; color: #83dfcc; background: #11323977; border: 1px solid #2c5c5b77; border-radius: 11px; }
+@media(max-width:700px) {
+  .page-heading-identity { gap: 10px; }
+  .page-heading-icon { width: 35px; height: 35px; border-radius: 8px; }
+  .page-heading-icon>svg { width: 20px; height: 20px; }
+}
