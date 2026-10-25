@@ -99,3 +99,5 @@
 [data-theme="terracotta"] .burrow-monitor-pill.monitoring>span { box-shadow: 0 0 8px #315B8C44; }[data-theme="terracotta"] .burrow-footer-protocol>span.live { background: #315B8C; }
 [data-theme="terracotta"] .burrow-detail-backdrop { background: #41333366; }[data-theme="terracotta"] .burrow-connection-orbit { color: #315B8C; background: #315B8C08; border-color: #315B8C33; box-shadow: 0 0 0 8px #315B8C08,0 0 0 16px #315B8C04; }
 @media(max-width:430px) { .theme-choices { gap: 10px; }.theme-choice { padding: 9px; }.theme-choice-title { font-size: 10px; }.theme-choice-description { font-size: 8px; }.theme-preview { height: 62px; } }
+
+.background-settings-form { padding: 0 22px 16px; display: grid; gap: 14px; }.background-settings-form>label { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }.background-settings-form input { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); }.background-settings-form .settings-card-footer { padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }

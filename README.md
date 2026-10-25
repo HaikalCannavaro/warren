@@ -12,6 +12,7 @@ Source ini memuat UI dan transport native, dengan target Windows dan Android. Ha
 
 ## Fitur dalam source
 
+- Pengiriman background Android melalui outbox native terenkripsi, relay VPS yang menyimpan admission/result, pemulihan chat, dan Firebase push notification. Memerlukan konfigurasi Firebase serta deploy relay sebelum diaktifkan. [Setup background dan Firebase](docs/BACKGROUND-DELIVERY.md).
 - **Observer** sebagai halaman awal dan menu pertama: telemetry Linux/NVIDIA dari target host, roster 10 agen, Kanban Hermes, pemilih host orkestrator terpisah, dan auto-poll 10 detik. [Panduan Observer](docs/OBSERVER.md).
 - **Burrow**, ruang temu para agen: stream komunikasi A2A melalui SSH, pemilih sumber VPS, filter spesialis, dan drawer transkrip berdasarkan task ID. [Panduan Burrow](docs/BURROW.md).
 - Pilihan tema **Warren Dark / Terracotta** di Settings, ikon sesuai palet, dan pengguliran riwayat terminal melalui sentuhan mobile. [Panduan tema dan terminal mobile](docs/THEMES-AND-MOBILE-TERMINAL.md).

@@ -1,4 +1,5 @@
 mod biometric;
+mod background;
 mod hermes;
 mod gateway;
 mod ssh;
@@ -35,6 +36,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            background::background_chat,
             ssh::ssh_probe,
             ssh::ssh_connect,
             ssh::ssh_write,

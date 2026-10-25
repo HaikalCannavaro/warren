@@ -1,3 +1,21 @@
+# Warren v0.6.0
+
+Rilis resmi Warren v0.6.0 — Memperkenalkan **Background Chat Delivery**, **Remote Push Notifications (Firebase Cloud Messaging / FCM)**, Native Outbox dengan Android Keystore & WorkManager, serta Replay & Reconnection Recovery.
+
+### Ringkasan Rilis (v0.6.0):
+- **Background Chat Delivery & Remote Push Notifications (Firebase FCM)**:
+  - Chat ke agen tidak lagi terputus saat aplikasi ditutup, di-minimize, atau saat layar HP mati (Doze Mode).
+  - Integrasi remote push notification FCM: HP menerima notifikasi banner sistem Android saat agen (Leveret) selesai memberikan balasan di latar belakang.
+- **Native Android Outbox & Keystore Security**:
+  - Antrean pesan native menggunakan WorkManager dengan enkripsi AES-256-GCM berbasis hardware **Android Keystore**, terpisah dari master password brankas.
+  - Dukungan retry otomatis dengan ID tetap (`Idempotency`) dan sinkronisasi kembali saat jaringan pulih.
+- **Settings → Background Delivery**:
+  - Panel konfigurasi baru di tab Settings untuk mengaktifkan pengiriman background per koneksi Gateway, mendaftarkan token perangkat, dan meminta izin `POST_NOTIFICATIONS` Android 13+.
+- **Server Background Relay**:
+  - Layanan relay ringan di VPS yang terhubung ke Hermes Gateway dengan protokol `durable-admission-v1` dan `event-replay-v1` untuk menjamin pekerjaan agen tetap diselesaikan dan diteruskan ke FCM.
+
+---
+
 # Warren v0.5.0
 
 Rilis resmi Warren v0.5.0 — Memperkenalkan **Fleet Observer Dashboard**, **The Burrow (Inter-Agent A2A Swarm Chatter)**, Dukungan Multi-Host Telemetri SSH, Tema Visual Baru (Warren Dark & Terracotta), dan Perbaikan Pengalaman Terminal Mobile.

@@ -1,0 +1,24 @@
+[Unit]
+Description=Warren durable Agent delivery relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=warren-relay
+Group=warren-relay
+WorkingDirectory=/opt/warren-relay
+EnvironmentFile=/etc/warren-relay/relay.env
+ExecStart=/opt/warren-relay/.venv/bin/python /opt/warren-relay/relay.py
+Restart=on-failure
+RestartSec=5
+StateDirectory=warren-relay
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

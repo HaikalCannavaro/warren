@@ -25,6 +25,9 @@ export interface Message {
   id: string; role: 'user' | 'assistant'; content: string; createdAt: number;
   status: 'sent' | 'streaming' | 'complete' | 'error' | 'unknown';
   requestId?: string; error?: string;
+  background?: boolean;
+  delivery?: 'queued' | 'running' | 'complete' | 'error' | 'unknown';
+  backgroundRequest?: import('./lib/backgroundChat').BackgroundRequest;
   agentProfile?: string;
 }
 export interface ExecutionLogEntry {

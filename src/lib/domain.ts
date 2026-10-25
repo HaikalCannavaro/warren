@@ -68,7 +68,7 @@ export function recoverState(input: unknown): SavedState {
     gatewayStateUncertain:c.gatewayStateUncertain===true || hasUncertainSessionMutation(c.commandResults) ? true : undefined,
     gatewaySessionId:typeof c.gatewaySessionId==='string' && c.gatewaySessionId.trim() && c.gatewaySessionId.length<=512 ? c.gatewaySessionId : undefined,
     agentProfile:normalizeAgentProfileName(c.agentProfile),
-    messages:c.messages.map(m=> ({...m,agentProfile:m.role==='assistant'?normalizeAgentProfileName(m.agentProfile):undefined,...(m.status === 'streaming' ? {status:'unknown' as const,error:interruption} : {})})),
+    messages:c.messages.map(m=> ({...m,agentProfile:m.role==='assistant'?normalizeAgentProfileName(m.agentProfile):undefined,...(m.status === 'streaming' && !m.background ? {status:'unknown' as const,error:interruption} : {})})),
   }))};
 }
 

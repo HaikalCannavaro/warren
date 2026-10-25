@@ -67,6 +67,10 @@ pub struct AndroidUpdater<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> AndroidUpdater<R> {
     #[cfg(target_os = "android")]
+    pub async fn background_chat(&self, action: String, payload: String) -> Result<serde_json::Value, tauri::plugin::mobile::PluginInvokeError> {
+        self.0.run_mobile_plugin_async("backgroundChat", serde_json::json!({"action": action, "payload": payload})).await
+    }
+    #[cfg(target_os = "android")]
     pub async fn runtime_info(&self) -> Result<RuntimeInfo, tauri::plugin::mobile::PluginInvokeError> {
         self.0.run_mobile_plugin_async("runtimeInfo", ()).await
     }

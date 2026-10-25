@@ -1,0 +1,2 @@
+aiohttp>=3.10.11,<4
+firebase-admin>=6.5,<8

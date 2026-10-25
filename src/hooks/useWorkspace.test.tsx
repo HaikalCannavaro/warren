@@ -1,4 +1,4 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspace } from './useWorkspace';
 import { emptyState } from '../lib/domain';
@@ -17,7 +17,12 @@ const f=vi.hoisted(()=>({
   gatewayProfile:vi.fn(),gatewayObservers:[] as ((sessionId:string,profile:string|undefined)=>void)[],
   gatewayClosed:false,
   biometricStatus:vi.fn(),enrollBiometric:vi.fn(),unlockWithBiometric:vi.fn(),clearBiometric:vi.fn(),
+  isAndroid:vi.fn(),backgroundStatus:vi.fn(),backgroundCommand:vi.fn(),
 }));
+vi.mock('../lib/backgroundChat',async()=>{
+  const actual=await vi.importActual<typeof import('../lib/backgroundChat')>('../lib/backgroundChat');
+  return {...actual,isAndroidNative:f.isAndroid,backgroundStatus:f.backgroundStatus,backgroundCommand:f.backgroundCommand};
+});
 vi.mock('../lib/gatewayClient',()=>({GatewayClient:class {
   constructor(_profile:unknown,onProfile?:(sessionId:string,profile:string|undefined)=>void){f.gatewayClosed=false;if(onProfile)f.gatewayObservers.push(onProfile);}
   isClosed(){return f.gatewayClosed;}
@@ -38,6 +43,8 @@ beforeEach(()=>{
   f.gatewayObservers=[];
   f.hermesHttp.mockReset();
   vi.resetAllMocks(); f.state=emptyState(); f.state.vps=[{...profile}];
+  f.isAndroid.mockReturnValue(false);f.backgroundStatus.mockResolvedValue({supported:false,enabled:false});
+  f.backgroundCommand.mockResolvedValue({jobs:[]});
   f.state.hermes=[{id:'hermes-1',name:'Hermes',url:'https://hermes.example/v1',token:'token',model:'hermes-agent'}];
   f.write.mockResolvedValue(undefined);f.close.mockResolvedValue(undefined);f.disconnect.mockResolvedValue(undefined);
   f.closeHandler=undefined;
@@ -1094,5 +1101,56 @@ describe('Extended slash commands suite', () => {
     });
     expect(f.clearBiometric).toHaveBeenCalledOnce();
     expect(h.result.current.biometric.enabled).toBe(false);
+  });
+});
+
+describe('native background delivery',()=>{
+  function enable(){
+    f.isAndroid.mockReturnValue(true);
+    f.backgroundStatus.mockResolvedValue({supported:true,enabled:true,profileId:'hermes-1'});
+    f.state!.hermes[0]={...f.state!.hermes[0],transport:'gateway',url:'wss://hermes.example/api/ws'};
+  }
+  it('saves the immutable intent before native enqueue and preserves it when the window closes',async()=>{
+    enable();const h=await opened();let id='';
+    act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Work while I leave');});
+    f.backgroundCommand.mockImplementation(async(action:string,payload?:{request?:{submissionId:string}})=>{
+      if(action==='enqueue') expect((f.write.mock.calls.at(-1)![0] as SavedState).conversations[0].messages.at(-1)?.backgroundRequest?.submissionId).toBe(payload?.request?.submissionId);
+      return {jobs:[]};
+    });
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    const reply=h.result.current.state.conversations[0].messages.at(-1)!;
+    expect(reply).toMatchObject({background:true,status:'streaming',delivery:'queued'});
+    expect(f.gatewaySend).not.toHaveBeenCalled();expect(f.stream).not.toHaveBeenCalled();
+    expect(h.result.current.streamingIds.has(id)).toBe(true);
+    await act(async()=>{await f.closeHandler!();});
+    expect((f.write.mock.calls.at(-1)![0] as SavedState).conversations[0].messages.at(-1)?.status).toBe('streaming');
+  });
+  it('retains a saved intent when native enqueue fails without falling back to a second Gateway send',async()=>{
+    enable();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Keep this intent');});
+    f.backgroundCommand.mockImplementation(async(action:string)=>{if(action==='enqueue')throw new Error('Native storage unavailable');return{jobs:[]};});
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(h.result.current.state.conversations[0].messages.at(-1)).toMatchObject({background:true,status:'streaming',backgroundRequest:{text:'Keep this intent'}});
+    expect(f.gatewaySend).not.toHaveBeenCalled();
+  });
+  it('does not acknowledge a completed native result until the vault save succeeds',async()=>{
+    enable();f.state!.conversations=[{id:'chat',profileId:'hermes-1',title:'Task',draft:'',createdAt:1,messages:[{id:'reply',role:'assistant',content:'',createdAt:1,status:'streaming',background:true,requestId:'request'}]}];
+    const jobs=[{submissionId:'request',conversationId:'chat',profileId:'hermes-1',state:'complete',text:'Background final'}];
+    f.backgroundCommand.mockImplementation(async(action:string)=>action==='results'?{jobs}:{});
+    f.write.mockRejectedValueOnce(new Error('Disk unavailable'));
+    const h=await opened();
+    await waitFor(()=>expect(h.result.current.state.conversations[0].messages[0].content).toBe('Background final'));
+    expect(f.backgroundCommand.mock.calls.some(call=>call[0]==='ack')).toBe(false);
+    await act(async()=>{document.dispatchEvent(new Event('visibilitychange'));});
+    await waitFor(()=>expect(f.backgroundCommand.mock.calls.some(call=>call[0]==='ack')).toBe(true));
+    expect((f.write.mock.calls.at(-1)![0] as SavedState).conversations[0].messages[0].status).toBe('complete');
+  });
+  it('ignores native results that arrive after the vault has locked',async()=>{
+    enable();let deliver!:(result:unknown)=>void;
+    f.backgroundCommand.mockImplementation(async(action:string)=>action==='results'?new Promise(resolve=>{deliver=resolve;}):{});
+    const h=await opened();await waitFor(()=>expect(deliver).toBeTypeOf('function'));
+    await act(async()=>{await h.result.current.lock();});
+    await act(async()=>{deliver({jobs:[]});});
+    expect(h.result.current.ready).toBe(false);expect(h.result.current.state.conversations).toEqual([]);
+    expect(f.backgroundCommand.mock.calls.some(call=>call[0]==='ack')).toBe(false);
   });
 });

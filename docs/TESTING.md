@@ -1,5 +1,15 @@
 # Pengujian Warren
 
+## Background delivery Android dan Firebase — 25 Oktober 2026
+
+- Baseline tepat `81350a9be1efd6745a5daf6747bb7795506252aa` / Warren v0.5.0. Perubahan belum dipush atau diterbitkan.
+- **331 tes frontend dalam 30 berkas lulus**, termasuk intent background sebelum enqueue, penyimpanan gagal tanpa pengiriman kedua, acknowledgment setelah Stronghold berhasil, hasil terlambat setelah lock, pemulihan status, serta konfigurasi Settings. Suite penuh lulus dengan dua worker; satu run paralel sebelumnya mencapai timeout pada tes navigasi updater yang sudah ada.
+- **68 tes script rilis lulus**, termasuk pemasangan Firebase pada modul Android yang benar, package validation, dan konfigurator yang idempoten. TypeScript dan build frontend produksi lulus; peringatan chunk Vite di atas 500 kB tetap ada.
+- **4 tes relay Python lulus** dengan HTTP/WebSocket loopback nyata: autentikasi API/idempotensi, receipt terputus setelah submit lalu ID dipakai ulang, persistensi SQLite dan korelasi replay, serta hasil error/unknown yang tidak dinyatakan sukses. Tidak ada tugas agen yang dikirim ke server pengguna dalam tes ini.
+- Bridge native memuat outbox terenkripsi Android Keystore, WorkManager, Firebase Messaging, dan routing notifikasi setelah unlock. Source Rust/Kotlin ditambahkan tetapi belum dikompilasi pada lingkungan ini karena toolchain Rust/Android SDK lengkap tidak tersedia.
+- Firebase project asli, service-account key, deployment relay di VPS, push end-to-end, swipe/Doze pada Galaxy A73 Android 16, serta build/install/upgrade APK tetap memerlukan validasi pipeline dan perangkat pengguna. Kelulusan frontend/relay lokal bukan bukti kelulusan Android native.
+- Panduan konfigurasi dan batasan tersedia pada [BACKGROUND-DELIVERY.md](BACKGROUND-DELIVERY.md). Konfigurasi dan kunci asli dikecualikan dari Git dan paket source.
+
 ## Observer, Burrow, tema, dan terminal mobile — 25 Oktober 2026
 
 - **322 tes frontend dalam 28 berkas lulus.** Pemeriksaan TypeScript dan build produksi frontend lulus. Main JavaScript 953,14 KB (gzip 275,35 KB); drawer transkrip dimuat terpisah. Peringatan ukuran chunk Vite di atas 500 KB masih ada.

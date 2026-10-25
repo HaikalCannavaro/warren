@@ -9,6 +9,7 @@ import { fetchHermesModels, fetchHermesSkills, fetchHermesToolsets, postHermesSt
 import { GatewayClient } from '../lib/gatewayClient';
 import * as native from '../lib/native';
 import { WorkspaceVault } from '../lib/vault';
+import { backgroundCommand, backgroundStatus, isAndroidNative, mergeBackgroundJobs, type BackgroundJob } from '../lib/backgroundChat';
 
 type HostPrompt={profileId:string;fingerprint:string;host:string};
 type TerminalBuffer={chunks:Uint8Array[];size:number;listener?:((bytes:Uint8Array)=>void)};
@@ -34,6 +35,7 @@ export function useWorkspace() {
   const [activeSessionId,setActiveSessionId]=useState<string|null>(null);
   const [hostPrompt,setHostPrompt]=useState<HostPrompt|null>(null);
   const [activeConversationId,setActiveConversationId]=useState<string|null>(null);
+  const [notificationTarget,setNotificationTarget]=useState<{conversationId:string;receivedAt:number}|null>(null);
   const [streamingIds,setStreamingIds]=useState<Set<string>>(new Set());
   const activeRequests=useRef(new Set<string>());
   const detachedRequests=useRef(new Set<string>());
@@ -84,6 +86,45 @@ export function useWorkspace() {
     return next;
   },[persist,canInteract]);
 
+  useEffect(()=>{
+    if (!ready || preview || !isAndroidNative()) return;
+    let disposed = false; let reading = false;
+    const sync = async () => {
+      if (reading || transition.current || !vault.current || document.visibilityState === 'hidden') return;
+      reading = true; const version = transitionVersion.current;
+      try {
+        const result = await backgroundCommand<{jobs: BackgroundJob[];openConversationId?:string}>('results', {deviceId: stateRef.current.deviceId});
+        if (disposed || version !== transitionVersion.current || transition.current) return;
+        const merged = mergeBackgroundJobs(stateRef.current, result.jobs);
+        if (result.openConversationId && merged.state.conversations.some(c=>c.id===result.openConversationId)) {
+          merged.state.activeConversationId=result.openConversationId;setActiveConversationId(result.openConversationId);
+          setNotificationTarget({conversationId:result.openConversationId,receivedAt:Date.now()});
+        }
+        if (JSON.stringify(merged.state) !== JSON.stringify(stateRef.current)) {
+          stateRef.current = merged.state; setState(merged.state); await persist();
+        }
+        // Acknowledge only after Stronghold has durably saved the final response.
+        if (merged.acknowledge.length && !disposed && version === transitionVersion.current) {
+          await persist(); await backgroundCommand('ack', {ids: merged.acknowledge});
+        }
+        // Recover a crash between saving the intent in the vault and native enqueue.
+        const status = await backgroundStatus();
+        if (disposed || version !== transitionVersion.current || transition.current) return;
+        for (const conversation of stateRef.current.conversations) for (const message of conversation.messages) {
+          if (status.enabled && status.profileId === conversation.profileId && message.backgroundRequest && !result.jobs.some(job => job.submissionId === message.requestId)) {
+            await backgroundCommand('enqueue', {profileId: conversation.profileId, request: message.backgroundRequest});
+          }
+        }
+      } catch (cause) {
+        if (!disposed && version === transitionVersion.current) setError(errorText(cause));
+      } finally { reading = false; }
+    };
+    const resume = () => { if (document.visibilityState !== 'hidden') { void backgroundCommand('sync').catch(()=>{}); void sync(); } };
+    resume(); const timer = setInterval(()=>{void sync();},5000);
+    document.addEventListener('visibilitychange',resume);
+    return () => { disposed=true; clearInterval(timer); document.removeEventListener('visibilitychange',resume); };
+  },[ready,preview,persist]);
+
   const closeDesktop=useCallback(async()=>{
     if(transition.current)return;
     transition.current='closing';transitionVersion.current++;setBusy(true);
@@ -93,7 +134,7 @@ export function useWorkspace() {
     // A saved unknown result remains unknown if closing fails after events were ignored.
     const interruption=translate("The window closed before the result was confirmed. Hermes may still be working; nothing was cancelled or resent.", "Jendela ditutup sebelum hasil dikonfirmasi. Hermes mungkin masih berjalan; tidak ada pembatalan atau pengiriman ulang.");
     const snapshot:SavedState={...stateRef.current,conversations:stateRef.current.conversations.map(c=>({...c,gatewayStateUncertain:c.gatewayStateUncertain||c.commandResults?.some(r=>(r.status==='pending'||r.status==='unknown')&&['model','compact'].includes(parseSlashCommand(r.command)?.name??'')),commandResults:sanitizeCommandResults(c.commandResults,interruption),executionLog:interruptExecutionLog(c,interruption),messages:c.messages.map(m=>
-      m.role==='assistant'&&m.status==='streaming' ? {...m,status:'unknown',error:interruption} : m
+      m.role==='assistant'&&m.status==='streaming'&&!m.background ? {...m,status:'unknown',error:interruption} : m
     )}))};
     stateRef.current=snapshot;setState(snapshot);setToolActivity({});
     try {
@@ -238,7 +279,7 @@ export function useWorkspace() {
     if(!canInteract())return;
     if(!profile.name.trim() || (profile.transport!=='gateway'&&!profile.model.trim())) throw new Error(translate("Enter an Agent name and an API model.", "Nama Agent dan model API wajib diisi."));
     if(profile.agentProfile?.trim()&&!normalizeAgentProfileName(profile.agentProfile))throw new Error(translate('Use a profile name of up to 80 characters, without paths or control characters.', 'Gunakan nama profil maksimal 80 karakter, tanpa path atau karakter kontrol.'));
-    if(stateRef.current.conversations.some(c=>c.profileId===profile.id&&(activeRequests.current.has(c.id)||pendingCommands.current.has(c.id)||pendingCatalogs.current.has(c.id))))throw new Error(translate("Wait for the Agent to finish before changing this connection.", "Tunggu pekerjaan Agent selesai sebelum mengubah koneksi."));
+    if(stateRef.current.conversations.some(c=>c.profileId===profile.id&&(c.messages.some(m=>m.background&&m.status==='streaming')||activeRequests.current.has(c.id)||pendingCommands.current.has(c.id)||pendingCatalogs.current.has(c.id))))throw new Error(translate("Wait for the Agent to finish before changing this connection.", "Tunggu pekerjaan Agent selesai sebelum mengubah koneksi."));
     const url=profile.transport==='gateway'?normalizeGatewayUrl(profile.url):normalizeHermesUrl(profile.url);
     const old=stateRef.current.hermes.find(p=>p.id===profile.id);
     const changed=!!old && (old.url!==url || (old.transport??'openai')!==(profile.transport??'openai'));
@@ -251,7 +292,7 @@ export function useWorkspace() {
   };
   const deleteHermes=(id:string)=>{
     if(!canInteract())return;
-    if(stateRef.current.conversations.some(c=>c.profileId===id && (activeRequests.current.has(c.id)||pendingCommands.current.has(c.id)||pendingCatalogs.current.has(c.id)))) throw new Error(translate("Wait for Hermes to finish before deleting this connection.", "Tunggu pekerjaan Hermes selesai sebelum menghapus profil."));
+    if(stateRef.current.conversations.some(c=>c.profileId===id && (c.messages.some(m=>m.background&&m.status==='streaming')||activeRequests.current.has(c.id)||pendingCommands.current.has(c.id)||pendingCatalogs.current.has(c.id)))) throw new Error(translate("Wait for Hermes to finish before deleting this connection.", "Tunggu pekerjaan Hermes selesai sebelum menghapus profil."));
     for(const c of stateRef.current.conversations.filter(c=>c.profileId===id)){const cached=gatewayClients.current.get(c.id);gatewayClients.current.delete(c.id);void cached?.client.close();}
     commit(s=>({...s,hermes:s.hermes.filter(p=>p.id!==id)}));
   };
@@ -334,7 +375,7 @@ export function useWorkspace() {
   const updateConversation=(id:string,fn:(c:Conversation)=>Conversation)=>commit(s=>({...s,conversations:s.conversations.map(c=>c.id===id?fn(c):c)}));
   const deleteConversation=(id:string)=>{
     if(!canInteract())return;
-    if(activeRequests.current.has(id)||pendingCommands.current.has(id)||pendingCatalogs.current.has(id))throw new Error(translate("Wait for the response or command to finish before deleting this conversation.", "Tunggu respons atau perintah selesai sebelum menghapus percakapan."));
+    if(stateRef.current.conversations.find(c=>c.id===id)?.messages.some(m=>m.background&&m.status==='streaming')||activeRequests.current.has(id)||pendingCommands.current.has(id)||pendingCatalogs.current.has(id))throw new Error(translate("Wait for the response or command to finish before deleting this conversation.", "Tunggu respons atau perintah selesai sebelum menghapus percakapan."));
     const cached=gatewayClients.current.get(id);gatewayClients.current.delete(id);void cached?.client.close();
     commit(s=>({...s,conversations:s.conversations.filter(c=>c.id!==id),activeConversationId:s.activeConversationId===id?undefined:s.activeConversationId}));
     setActiveConversationId(current=>current===id?null:current);
@@ -598,6 +639,7 @@ export function useWorkspace() {
     if(!rawDraft)return;
     if(textOverride===undefined&&rawDraft.startsWith('/')&&!rawDraft.startsWith('//'))return runCommand(id,rawDraft);
     if(activeRequests.current.has(id)||pendingCommands.current.has(id))return;
+    if(c.messages.some(message=>message.background&&message.status==='streaming')){setError(translate('Wait for the background message to finish.','Tunggu pesan background selesai.'));return;}
     const profile=stateRef.current.hermes.find(p=>p.id===c.profileId);if(!profile){setError(translate("The Agent connection has been deleted. This conversation is archived.", "Profil Hermes sudah dihapus. Percakapan ini merupakan arsip."));return;}
     if(c.messages.some(m=>m.status==='unknown')){setError(translate("A task in this conversation has an unknown result. Check Hermes, then start a new conversation to avoid resending the task.", "Percakapan memiliki tugas dengan hasil belum diketahui. Periksa Hermes lalu mulai percakapan baru agar tugas tidak dikirim ulang."));return;}
     if(c.gatewayStateUncertain||c.commandResults?.some(r=>r.status==='unknown'&&['model','compact'].includes(parseSlashCommand(r.command)?.name??''))){setError(translate("A session change has an unknown result. Check Hermes, then start a new conversation.", "Status perubahan sesi belum diketahui. Periksa Hermes lalu mulai percakapan baru."));return;}
@@ -620,6 +662,18 @@ export function useWorkspace() {
     try {
       await persist(); // Persist request identity before any network admission.
       if(transition.current || detachedRequests.current.has(id))return;
+      if (profile.transport === 'gateway' && isAndroidNative()) {
+        const background = await backgroundStatus();
+        if (background.enabled && background.profileId === profile.id) {
+          const request = {deviceId:stateRef.current.deviceId,conversationId:id,submissionId:requestId,text,
+            ...(c.gatewaySessionId?{sessionId:c.gatewaySessionId}:{}),...((c.model||profile.model)?{model:c.model||profile.model}:{})};
+          updateMessage({background:true,delivery:'queued',backgroundRequest:request}); await persist();
+          if (transition.current || detachedRequests.current.has(id)) return;
+          try { await backgroundCommand('enqueue',{profileId:profile.id,request}); }
+          catch { updateMessage({error:translate('Delivery is saved and will resume when Warren reconnects.','Pengiriman tersimpan dan akan dilanjutkan saat Warren terhubung kembali.')}); }
+          receivedTerminal=true; return;
+        }
+      }
       const onEvent=(event:HermesEvent)=>{
         if(transition.current==='closing' || detachedRequests.current.has(id) || receivedTerminal)return;
         if('agentProfile' in event)updateMessage({agentProfile:normalizeAgentProfileName(event.agentProfile)??normalizeAgentProfileName(profile.agentProfile)});
@@ -655,7 +709,7 @@ export function useWorkspace() {
   const sendMessage=async(id:string)=>dispatchUserMessage(id);
 
   return {
-    ready,preview,busy,error,saveError,state,unlock,lock,biometric,autoPromptBiometric,unlockBiometric,disableBiometric,runUpdateInstallation,clearError:()=>setError(null),
+    ready,preview,busy,error,saveError,state,unlock,lock,biometric,autoPromptBiometric,unlockBiometric,disableBiometric,runUpdateInstallation,notificationTarget,clearError:()=>setError(null),
     saveVps,deleteVps,saveHermes,deleteHermes,
     updateSettings:(settings:Settings)=>commit(s=>({...s,settings:{fontSize:Math.min(24,Math.max(10,settings.fontSize)),scrollback:Math.min(20000,Math.max(1000,settings.scrollback))}})),
     sessions,activeSessionId,setActiveSessionId,connectVps,closeSession,hostPrompt,acceptHost,rejectHost:()=>setHostPrompt(null),
@@ -663,7 +717,7 @@ export function useWorkspace() {
     activeConversationId,setActiveConversationId:selectConversation,createConversation,openConversation,deleteConversation,
     renameConversation:(id:string,title:string)=>{if(title.trim())updateConversation(id,c=>({...c,title:title.trim().slice(0,80)}));},
     setDraft:(id:string,text:string)=>updateConversation(id,c=>({...c,draft:text})),
-    sendMessage,streamingIds,toolActivity,runCommand,loadCommands,commandBusyIds,commandCatalog,commandsLoadingIds,
+    sendMessage,streamingIds:new Set([...streamingIds,...state.conversations.filter(c=>c.messages.some(m=>m.background&&m.status==='streaming')).map(c=>c.id)]),toolActivity,runCommand,loadCommands,commandBusyIds,commandCatalog,commandsLoadingIds,
     testHermes:async(profileId:string)=>{
       if(!canInteract())throw new Error(translate("Wait for saving or locking to finish.", "Tunggu proses penyimpanan atau penguncian selesai."));
       const p=stateRef.current.hermes.find(p=>p.id===profileId);if(!p)throw new Error(translate("Connection not found.", "Profil tidak ditemukan."));

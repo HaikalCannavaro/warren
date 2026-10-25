@@ -46,6 +46,14 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:release
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test durable background relay
+        run: |
+          python -m venv "$RUNNER_TEMP/warren-relay-tests"
+          "$RUNNER_TEMP/warren-relay-tests/bin/pip" install -r server/background-relay/requirements.txt
+          "$RUNNER_TEMP/warren-relay-tests/bin/python" -m unittest discover -s server/background-relay -p test_relay.py -v
 
   windows:
     name: Build Windows installer
@@ -133,6 +141,10 @@ jobs:
         run: |
           npm run tauri -- android init --ci --skip-targets-install
           npm run icons:generate
+      - name: Configure Android Firebase
+        env:
+          FIREBASE_GOOGLE_SERVICES_BASE64: ${{ secrets.FIREBASE_GOOGLE_SERVICES_BASE64 }}
+        run: node scripts/configure-android-firebase.mjs --required
       - name: Build universal release APK
         run: npm run android:release -- --ci
       - name: Sign and verify APK
