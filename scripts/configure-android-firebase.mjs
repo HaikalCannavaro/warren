@@ -21,8 +21,13 @@ export function configureAndroidFirebase(root, { required = false, encoded = '' 
   if (!fs.existsSync(appBuild) || !fs.existsSync(rootBuild)) throw new Error('Generate the Android project with tauri android init first.');
   let source = fs.readFileSync(rootBuild, 'utf8');
   if (!source.includes('com.google.gms.google-services')) {
-    if (/plugins\s*\{/.test(source)) source = source.replace(/plugins\s*\{/, 'plugins {\n    id("com.google.gms.google-services") version "4.5.0" apply false');
-    else source = 'buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath("com.google.gms:google-services:4.5.0") }\n}\n' + source;
+    if (/plugins\s*\{/.test(source)) {
+      source = source.replace(/plugins\s*\{/, 'plugins {\n    id("com.google.gms.google-services") version "4.4.2" apply false');
+    } else if (/dependencies\s*\{/.test(source)) {
+      source = source.replace(/dependencies\s*\{/, 'dependencies {\n        classpath("com.google.gms:google-services:4.4.2")');
+    } else {
+      source = 'buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath("com.google.gms:google-services:4.4.2") }\n}\n' + source;
+    }
     fs.writeFileSync(rootBuild, source);
   }
   source = fs.readFileSync(appBuild, 'utf8');

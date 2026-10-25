@@ -20,6 +20,13 @@ test('Firebase setup targets the generated app, validates package ID and remains
     assert.match(fs.readFileSync(path.join(root,'src-tauri/gen/android/app/src/main/AndroidManifest.xml'),'utf8'),/allowBackup="false"/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(root,'src-tauri/gen/android/app/google-services.json'),'utf8')).client.length,1);
     assert.throws(()=>configureAndroidFirebase(root,{encoded:Buffer.from(JSON.stringify({client:[]})).toString('base64')}),/dev.harbor.workspace/);
+
+    // Also test root build.gradle.kts with buildscript block (Tauri v2 format)
+    fs.writeFileSync(path.join(root,'src-tauri/gen/android/build.gradle.kts'),'buildscript {\n repositories { google() }\n dependencies {\n classpath("com.android.tools.build:gradle:8.7.0")\n }\n}\n');
+    configureAndroidFirebase(root,{required:true});
+    const rootContent = fs.readFileSync(path.join(root,'src-tauri/gen/android/build.gradle.kts'),'utf8');
+    assert.equal((rootContent.match(/buildscript\s*\{/g)??[]).length, 1);
+    assert.match(rootContent, /google-services:4\.4\.2/);
   } finally {
     assert.ok(path.resolve(root).startsWith(path.resolve(os.tmpdir())+path.sep) && path.basename(root).startsWith('warren-firebase-'));
     fs.rmSync(root,{recursive:true,force:true});
