@@ -1,3 +1,18 @@
+# Warren v0.6.1
+
+Rilis hotfix resmi Warren v0.6.1 — Mengatasi fatal crash startup Android (WorkManager Room reflection) dan menambahkan fitur minimize-to-tray pada desktop Windows.
+
+### Ringkasan Hotfix (v0.6.1):
+- **Perbaikan Fatal Crash Startup Android (Samsung One UI / Android 16)**:
+  - Memperbaiki aturan ProGuard/R8 consumer (`consumer-rules.pro`) untuk mempertahankan constructor reflection `androidx.work.impl.WorkDatabase_Impl` dan class turunan `androidx.room.RoomDatabase`.
+  - Mengeliminasi `NoSuchMethodException` pada `InitializationProvider` yang sebelumnya menyebabkan aplikasi force close seketika saat cold-start.
+  - Menambahkan verifikator bytecode otomatis (`scripts/verify-android-startup.py`) pada pipeline CI untuk menjamin APK rilis bebas dari regresi startup reflection.
+- **Desktop System Tray (Close-to-Tray)**:
+  - Tombol **Close (X) / Alt+F4** di desktop kini menyimpan state vault secara aman dan menyembunyikan aplikasi ke system tray tanpa memutus koneksi Gateway, stream respons AI, maupun sesi terminal SSH.
+  - Opsi **Quit Warren** pada menu konteks tray untuk keluar penuh secara bersih setelah flush state.
+
+---
+
 # Warren v0.6.0
 
 Rilis resmi Warren v0.6.0 — Memperkenalkan **Background Chat Delivery**, **Remote Push Notifications (Firebase Cloud Messaging / FCM)**, Native Outbox dengan Android Keystore & WorkManager, serta Replay & Reconnection Recovery.

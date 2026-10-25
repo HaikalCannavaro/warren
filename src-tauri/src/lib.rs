@@ -4,6 +4,8 @@ mod hermes;
 mod gateway;
 mod ssh;
 mod updater;
+#[cfg(desktop)]
+mod desktop;
 #[cfg(target_os = "android")]
 mod android_updates;
 
@@ -22,6 +24,10 @@ pub fn run() {
             )?;
             #[cfg(target_os = "windows")]
             updater::initialize(app.handle())?;
+            #[cfg(desktop)]
+            if let Err(error) = desktop::initialize(app.handle()) {
+                eprintln!("Warren system tray could not start: {error}");
+            }
             #[cfg(target_os = "android")]
             {
                 app.manage(android_updates::AndroidUpdateState::default());
@@ -30,12 +36,22 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // The frontend saves and hides to tray. A slow or not-yet-loaded
+                // frontend must never turn an ordinary close into a real exit.
+                if window.label() == "main" {
+                    api.prevent_close();
+                }
+            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 window.state::<ssh::SshState>().disconnect_all();
                 window.state::<gateway::GatewayState>().disconnect_all();
             }
         })
         .invoke_handler(tauri::generate_handler![
+            desktop_hide,
+            desktop_quit,
             background::background_chat,
             ssh::ssh_probe,
             ssh::ssh_connect,
@@ -65,4 +81,20 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("Warren could not start");
+}
+
+#[tauri::command]
+fn desktop_hide(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    { desktop::hide(app) }
+    #[cfg(mobile)]
+    { let _ = app; Err("The system tray is available on desktop only.".into()) }
+}
+
+#[tauri::command]
+fn desktop_quit(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    { app.exit(0); Ok(()) }
+    #[cfg(mobile)]
+    { let _ = app; Err("Desktop exit is unavailable on mobile.".into()) }
 }

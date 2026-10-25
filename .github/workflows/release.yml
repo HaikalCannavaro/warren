@@ -54,6 +54,8 @@ jobs:
           python -m venv "$RUNNER_TEMP/warren-relay-tests"
           "$RUNNER_TEMP/warren-relay-tests/bin/pip" install -r server/background-relay/requirements.txt
           "$RUNNER_TEMP/warren-relay-tests/bin/python" -m unittest discover -s server/background-relay -p test_relay.py -v
+      - name: Test Android release startup verifier
+        run: python -m unittest discover -s scripts -p test_android_startup.py -v
 
   windows:
     name: Build Windows installer
@@ -120,6 +122,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - uses: android-actions/setup-android@v3
         with:
           packages: ''
@@ -171,6 +176,8 @@ jobs:
           "$tools/apksigner" sign --ks "$RUNNER_TEMP/warren-android.jks" --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out artifacts/android/Warren-android.apk "$RUNNER_TEMP/warren-aligned.apk"
           "$tools/apksigner" verify --verbose artifacts/android/Warren-android.apk
           "$tools/zipalign" -c -P 16 -v 4 artifacts/android/Warren-android.apk
+      - name: Verify Room and WorkManager startup in the minified APK
+        run: python scripts/verify-android-startup.py artifacts/android/Warren-android.apk
       - uses: actions/upload-artifact@v4
         with:
           name: warren-android-release

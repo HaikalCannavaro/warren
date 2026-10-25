@@ -1,6 +1,6 @@
 [package]
 name = "harbor"
-version = "0.6.0"
+version = "0.6.1"
 description = "Warren — SSH terminal and Hermes workspace"
 authors = ["Warren contributors"]
 edition = "2021"
@@ -28,6 +28,7 @@ base64 = "0.22"
 minisign-verify = "0.3"
 
 [target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-updater = { version = "=2.14.0", default-features = false, features = ["rustls-tls"] }
 
 [target.'cfg(target_os = "android")'.dependencies]

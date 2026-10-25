@@ -127,12 +127,24 @@ export function useWorkspace() {
 
   const closeDesktop=useCallback(async()=>{
     if(transition.current)return;
+    try {
+      await persist();
+      if(transition.current)return;
+      // Hiding keeps the mounted workspace and its HTTP/SSH/Gateway listeners alive.
+      await native.hideWindow();
+    } catch(e) {
+      setError(`${translate("Warren could not move to the system tray.", "Warren belum dapat dipindahkan ke system tray.")} ${errorText(e)}`);
+    }
+  },[persist]);
+
+  const quitDesktop=useCallback(async()=>{
+    if(transition.current)return;
     transition.current='closing';transitionVersion.current++;setBusy(true);
     if(saveTimer.current)clearTimeout(saveTimer.current);
     saveTimer.current=null;
     for(const id of activeRequests.current)detachedRequests.current.add(id);
     // A saved unknown result remains unknown if closing fails after events were ignored.
-    const interruption=translate("The window closed before the result was confirmed. Hermes may still be working; nothing was cancelled or resent.", "Jendela ditutup sebelum hasil dikonfirmasi. Hermes mungkin masih berjalan; tidak ada pembatalan atau pengiriman ulang.");
+    const interruption=translate("Warren quit before the result was confirmed. Hermes may still be working; nothing was cancelled or resent.", "Warren keluar sebelum hasil dikonfirmasi. Hermes mungkin masih berjalan; tidak ada pembatalan atau pengiriman ulang.");
     const snapshot:SavedState={...stateRef.current,conversations:stateRef.current.conversations.map(c=>({...c,gatewayStateUncertain:c.gatewayStateUncertain||c.commandResults?.some(r=>(r.status==='pending'||r.status==='unknown')&&['model','compact'].includes(parseSlashCommand(r.command)?.name??'')),commandResults:sanitizeCommandResults(c.commandResults,interruption),executionLog:interruptExecutionLog(c,interruption),messages:c.messages.map(m=>
       m.role==='assistant'&&m.status==='streaming'&&!m.background ? {...m,status:'unknown',error:interruption} : m
     )}))};
@@ -140,7 +152,7 @@ export function useWorkspace() {
     try {
       await persist();
       await closeGateways();
-      await native.destroyWindow();
+      await native.quitApplication();
     } catch(e) {
       transition.current=null;setBusy(false);
       setError(`${translate("The window remains open because it could not be closed safely.", "Jendela tetap terbuka karena belum dapat ditutup dengan aman.")} ${errorText(e)}`);
@@ -153,6 +165,13 @@ export function useWorkspace() {
       .catch(e=>{if(!disposed)setError(`${translate("Saving before closing the window could not be enabled.", "Penyimpanan sebelum menutup jendela tidak dapat diaktifkan.")} ${errorText(e)}`);});
     return()=>{disposed=true;unlisten?.();};
   },[closeDesktop]);
+
+  useEffect(()=>{
+    let disposed=false;let unlisten:(()=>void)|undefined;
+    void native.onDesktopQuit(quitDesktop).then(stop=>{if(disposed)stop();else unlisten=stop;})
+      .catch(e=>{if(!disposed)setError(errorText(e));});
+    return()=>{disposed=true;unlisten?.();};
+  },[quitDesktop]);
 
   useEffect(()=>{
     const flush=()=>{ if(!transition.current && document.visibilityState==='hidden') void persist().catch(()=>{}); };

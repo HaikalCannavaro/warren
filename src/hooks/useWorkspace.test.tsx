@@ -11,8 +11,9 @@ const f=vi.hoisted(()=>({
   state:undefined as SavedState|undefined,
   write:vi.fn(),close:vi.fn(),open:vi.fn(),probe:vi.fn(),connect:vi.fn(),disconnect:vi.fn(),stream:vi.fn(),
   hermesHttp:vi.fn(),
-  writeSsh:vi.fn(),resizeSsh:vi.fn(),onDesktopClose:vi.fn(),destroyWindow:vi.fn(),unlisten:vi.fn(),
+  writeSsh:vi.fn(),resizeSsh:vi.fn(),onDesktopClose:vi.fn(),hideWindow:vi.fn(),onDesktopQuit:vi.fn(),quitApplication:vi.fn(),unlisten:vi.fn(),unlistenQuit:vi.fn(),
   closeHandler:undefined as (()=>Promise<void>)|undefined,
+  quitHandler:undefined as (()=>Promise<void>)|undefined,
   gatewayConnect:vi.fn(),gatewaySession:vi.fn(),gatewayCatalog:vi.fn(),gatewayCommand:vi.fn(),gatewaySend:vi.fn(),gatewayClose:vi.fn(),
   gatewayProfile:vi.fn(),gatewayObservers:[] as ((sessionId:string,profile:string|undefined)=>void)[],
   gatewayClosed:false,
@@ -34,7 +35,7 @@ vi.mock('../lib/native',()=>({
   nativeAvailable:()=>true,probeSsh:f.probe,connectSsh:f.connect,disconnectSsh:f.disconnect,
   writeSsh:f.writeSsh,resizeSsh:f.resizeSsh,streamHermes:f.stream,probeHermes:vi.fn(),
   hermesHttp:f.hermesHttp,
-  onDesktopClose:f.onDesktopClose,destroyWindow:f.destroyWindow,
+  onDesktopClose:f.onDesktopClose,hideWindow:f.hideWindow,onDesktopQuit:f.onDesktopQuit,quitApplication:f.quitApplication,
   getBiometricStatus:f.biometricStatus,enrollBiometric:f.enrollBiometric,unlockWithBiometric:f.unlockWithBiometric,clearBiometric:f.clearBiometric,
 }));
 const profile:VpsProfile={id:'vps-1',name:'My VPS',host:'example.test',port:22,username:'deploy',auth:'password',password:'secret',privateKey:'',passphrase:''};
@@ -47,9 +48,10 @@ beforeEach(()=>{
   f.backgroundCommand.mockResolvedValue({jobs:[]});
   f.state.hermes=[{id:'hermes-1',name:'Hermes',url:'https://hermes.example/v1',token:'token',model:'hermes-agent'}];
   f.write.mockResolvedValue(undefined);f.close.mockResolvedValue(undefined);f.disconnect.mockResolvedValue(undefined);
-  f.closeHandler=undefined;
+  f.closeHandler=undefined;f.quitHandler=undefined;
   f.onDesktopClose.mockImplementation(async(handler:()=>Promise<void>)=>{f.closeHandler=handler;return f.unlisten;});
-  f.destroyWindow.mockResolvedValue(undefined);f.writeSsh.mockResolvedValue(undefined);f.resizeSsh.mockResolvedValue(undefined);
+  f.onDesktopQuit.mockImplementation(async(handler:()=>Promise<void>)=>{f.quitHandler=handler;return f.unlistenQuit;});
+  f.hideWindow.mockResolvedValue(undefined);f.quitApplication.mockResolvedValue(undefined);f.writeSsh.mockResolvedValue(undefined);f.resizeSsh.mockResolvedValue(undefined);
   f.open.mockImplementation(async()=>({vault:{write:f.write,close:f.close},state:f.state}));
   f.probe.mockResolvedValue('SHA256:verified');
   f.connect.mockImplementation(async(_request:SshRequest,onEvent:(e:SshEvent)=>void)=>{onEvent({type:'status',status:'connected'});});
@@ -185,11 +187,11 @@ describe('Gateway workspace integration',()=>{
     expect(h.result.current.streamingIds.has(id)).toBe(true);expect(h.result.current.ready).toBe(true);expect(f.close).not.toHaveBeenCalled();
     await act(async()=>{stream.resolve();await sending;});
   });
-  it('marks an interrupted command unknown and ignores late completion after window close',async()=>{
+  it('marks an interrupted command unknown and ignores late completion after explicit quit',async()=>{
     gateway();const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
     const command=deferred();f.gatewayCommand.mockImplementationOnce(async()=>{await command.promise;return 'late';});let running!:Promise<void>;
     await act(async()=>{running=h.result.current.runCommand(id,'/model example');});
-    await act(async()=>{await f.closeHandler!();command.resolve();await running;});
+    await act(async()=>{await f.quitHandler!();command.resolve();await running;});
     expect(f.gatewayClose).toHaveBeenCalled();expect(h.result.current.state.conversations[0].commandResults?.at(-1)?.status).toBe('unknown');
   });
   it('prevents installation and duplicate controls while a command is pending',async()=>{
@@ -350,7 +352,64 @@ describe('workspace transitions and recoverable terminal errors',()=>{
   });
 });
 
-describe('desktop close durability',()=>{
+describe('desktop close to tray',()=>{
+  it.each(['http','gateway'] as const)('keeps a %s reply alive, saves its final response, then allows a follow-up',async transport=>{
+    if(transport==='gateway')f.state!.hermes[0]={...f.state!.hermes[0],transport:'gateway',url:'wss://hermes.example/api/ws'};
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Start work');});
+    const stream=deferred();let onEvent!:(event:HermesEvent)=>void;
+    if(transport==='gateway')f.gatewaySend.mockImplementationOnce((_session:string,_text:string,_submission:string,handler:(event:HermesEvent)=>void)=>{onEvent=handler;return stream.promise;});
+    else f.stream.mockImplementationOnce((_request:HermesRequest,handler:(event:HermesEvent)=>void)=>{onEvent=handler;return stream.promise;});
+    let sending!:Promise<void>;await act(async()=>{sending=h.result.current.sendMessage(id);});
+    act(()=>onEvent({type:'delta',text:'Before hide. '}));
+    await act(async()=>{await f.closeHandler!();});
+    expect(f.hideWindow).toHaveBeenCalledOnce();expect(f.quitApplication).not.toHaveBeenCalled();
+    expect(f.gatewayClose).not.toHaveBeenCalled();expect(f.disconnect).not.toHaveBeenCalled();
+    expect(h.result.current.state.conversations[0].messages.at(-1)).toMatchObject({status:'streaming',content:'Before hide. '});
+    expect(h.result.current.streamingIds.has(id)).toBe(true);expect(h.result.current.busy).toBe(false);
+    await act(async()=>{onEvent({type:'delta',text:'After hide.'});onEvent({type:'done',finishReason:'stop'});stream.resolve();await sending;});
+    expect(h.result.current.state.conversations[0].messages.at(-1)).toMatchObject({status:'complete',content:'Before hide. After hide.'});
+    expect((f.write.mock.calls.at(-1)![0] as SavedState).conversations[0].messages.at(-1)?.status).toBe('complete');
+    act(()=>h.result.current.setDraft(id,'Follow up'));
+    await act(async()=>{await h.result.current.sendMessage(id);});
+    expect(h.result.current.state.conversations[0].messages).toHaveLength(4);
+    expect(h.result.current.state.conversations[0].messages.at(-1)?.status).toBe('complete');
+  });
+
+  it('keeps receiving events if the system tray is unavailable',async()=>{
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Start work');});
+    const stream=deferred();let onEvent!:(event:HermesEvent)=>void;
+    f.stream.mockImplementationOnce((_request:HermesRequest,handler:(event:HermesEvent)=>void)=>{onEvent=handler;return stream.promise;});
+    let sending!:Promise<void>;await act(async()=>{sending=h.result.current.sendMessage(id);});
+    f.hideWindow.mockRejectedValueOnce(new Error('System tray unavailable'));
+    await act(async()=>{await f.closeHandler!();onEvent({type:'delta',text:'Still listening'});onEvent({type:'done',finishReason:'stop'});stream.resolve();await sending;});
+    expect(h.result.current.error).toContain('System tray unavailable');
+    expect(h.result.current.state.conversations[0].messages.at(-1)).toMatchObject({status:'complete',content:'Still listening'});
+    expect(f.quitApplication).not.toHaveBeenCalled();
+  });
+
+  it('does not invalidate a request whose initial save overlaps hiding',async()=>{
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Keep working');});
+    const saving=deferred();f.write.mockReturnValueOnce(saving.promise);let sending!:Promise<void>;
+    act(()=>{sending=h.result.current.sendMessage(id);});
+    await act(async()=>{await f.closeHandler!();saving.resolve();await sending;});
+    expect(f.hideWindow).toHaveBeenCalledOnce();expect(f.stream).toHaveBeenCalledOnce();
+    expect(h.result.current.state.conversations[0].messages.at(-1)?.status).toBe('complete');
+  });
+
+  it('keeps the window and live request intact if saving before hide fails',async()=>{
+    const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Start work');});
+    const stream=deferred();let onEvent!:(event:HermesEvent)=>void;
+    f.stream.mockImplementationOnce((_request:HermesRequest,handler:(event:HermesEvent)=>void)=>{onEvent=handler;return stream.promise;});
+    let sending!:Promise<void>;await act(async()=>{sending=h.result.current.sendMessage(id);});
+    f.write.mockRejectedValueOnce(new Error('disk full'));
+    await act(async()=>{await f.closeHandler!();});
+    expect(f.hideWindow).not.toHaveBeenCalled();expect(h.result.current.saveError).toBeTruthy();
+    await act(async()=>{onEvent({type:'delta',text:'Recovered'});onEvent({type:'done',finishReason:'stop'});stream.resolve();await sending;});
+    expect(h.result.current.state.conversations[0].messages.at(-1)).toMatchObject({status:'complete',content:'Recovered'});
+  });
+});
+
+describe('desktop explicit quit durability',()=>{
   it('persists unfinished chats as unknown before closing and ignores late events',async()=>{
     const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Start work');});
     const stream=deferred();let onEvent!:(event:HermesEvent)=>void;
@@ -358,25 +417,25 @@ describe('desktop close durability',()=>{
     let sending!:Promise<void>;await act(async()=>{sending=h.result.current.sendMessage(id);});
     act(()=>onEvent({type:'delta',text:'partial'}));
     const saving=deferred();f.write.mockReturnValueOnce(saving.promise);let closing!:Promise<void>;
-    act(()=>{closing=f.closeHandler!();});
+    act(()=>{closing=f.quitHandler!();});
     const saved=f.write.mock.calls.at(-1)![0] as SavedState;
     expect(saved.conversations[0].messages.at(-1)).toMatchObject({status:'unknown',content:'partial'});
     expect(saved.conversations[0].executionLog?.map(entry=>entry.kind)).toEqual(['request','response','unknown']);
-    expect(f.destroyWindow).not.toHaveBeenCalled();
+    expect(f.quitApplication).not.toHaveBeenCalled();
     act(()=>{onEvent({type:'delta',text:' discarded'});onEvent({type:'done',finishReason:'stop'});h.result.current.setDraft(id,'blocked');});
     expect(h.result.current.state.conversations[0].messages.at(-1)).toMatchObject({status:'unknown',content:'partial'});
     expect(h.result.current.state.conversations[0].executionLog?.map(entry=>entry.kind)).toEqual(['request','response','unknown']);
     expect(h.result.current.state.conversations[0].draft).toBe('');
     const saves=f.write.mock.calls.length;
     await act(async()=>{saving.resolve();await closing;stream.resolve();await sending;});
-    expect(f.destroyWindow).toHaveBeenCalledOnce();expect(f.write).toHaveBeenCalledTimes(saves);
+    expect(f.quitApplication).toHaveBeenCalledOnce();expect(f.write).toHaveBeenCalledTimes(saves);
   });
 
   it('keeps the window open and restores editing if the close save fails',async()=>{
     const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');});
     f.write.mockRejectedValueOnce(new Error('disk full'));
-    await act(async()=>{await f.closeHandler!();});
-    expect(f.destroyWindow).not.toHaveBeenCalled();expect(h.result.current.ready).toBe(true);
+    await act(async()=>{await f.quitHandler!();});
+    expect(f.quitApplication).not.toHaveBeenCalled();expect(h.result.current.ready).toBe(true);
     expect(h.result.current.busy).toBe(false);expect(h.result.current.saveError).toBeTruthy();
     act(()=>h.result.current.setDraft(id,'saved after recovery'));
     expect(h.result.current.state.conversations[0].draft).toBe('saved after recovery');
@@ -387,8 +446,8 @@ describe('desktop close durability',()=>{
     const stream=deferred();let onEvent!:(event:HermesEvent)=>void;
     f.stream.mockImplementation((_request:HermesRequest,handler:(event:HermesEvent)=>void)=>{onEvent=handler;return stream.promise;});
     let sending!:Promise<void>;await act(async()=>{sending=h.result.current.sendMessage(id);});
-    f.destroyWindow.mockRejectedValueOnce(new Error('window still open'));
-    await act(async()=>{await f.closeHandler!();stream.resolve();await sending;});
+    f.quitApplication.mockRejectedValueOnce(new Error('window still open'));
+    await act(async()=>{await f.quitHandler!();stream.resolve();await sending;});
     act(()=>{onEvent({type:'delta',text:'late response'});onEvent({type:'done',finishReason:'stop'});});
     const conversation=h.result.current.state.conversations[0];
     expect(conversation.messages.at(-1)).toMatchObject({status:'unknown',content:''});
@@ -399,13 +458,13 @@ describe('desktop close durability',()=>{
     const h=await opened();let id='';act(()=>{id=h.result.current.createConversation('hermes-1');h.result.current.setDraft(id,'Do not send after closing');});
     const saving=deferred();f.write.mockReturnValueOnce(saving.promise);let sending!:Promise<void>;
     act(()=>{sending=h.result.current.sendMessage(id);});
-    await act(async()=>{await f.closeHandler!();saving.resolve();await sending;});
+    await act(async()=>{await f.quitHandler!();saving.resolve();await sending;});
     expect(f.stream).not.toHaveBeenCalled();
     expect(h.result.current.state.conversations[0].messages.at(-1)!.status).toBe('unknown');
   });
 
   it('unregisters the native close listener on unmount',async()=>{
-    const h=await opened();h.unmount();expect(f.unlisten).toHaveBeenCalledOnce();
+    const h=await opened();h.unmount();expect(f.unlisten).toHaveBeenCalledOnce();expect(f.unlistenQuit).toHaveBeenCalledOnce();
   });
 });
 
@@ -416,7 +475,7 @@ describe('update installation durability',()=>{
     const install=vi.fn().mockResolvedValue({status:'installerOpened'});let updating!:Promise<unknown>;
     act(()=>{updating=h.result.current.runUpdateInstallation(install);h.result.current.setDraft(id,'must not overwrite');});
     await act(async()=>{await h.result.current.connectVps('vps-1');await h.result.current.sendMessage(id);await f.closeHandler!();});
-    expect(install).not.toHaveBeenCalled();expect(f.probe).not.toHaveBeenCalled();expect(f.stream).not.toHaveBeenCalled();expect(f.destroyWindow).not.toHaveBeenCalled();
+    expect(install).not.toHaveBeenCalled();expect(f.probe).not.toHaveBeenCalled();expect(f.stream).not.toHaveBeenCalled();expect(f.quitApplication).not.toHaveBeenCalled();
     expect(h.result.current.state.conversations[0].draft).toBe('preserve this draft');
     await act(async()=>{saving.resolve();await updating;});
     expect(install).toHaveBeenCalledOnce();expect(h.result.current.busy).toBe(false);

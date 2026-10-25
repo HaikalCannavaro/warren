@@ -14,7 +14,7 @@ ID pengiriman tidak diganti saat retry. Setelah restart relay, admission yang su
 
 Saat Warren dibuka dan brankas terbuka, hasil cache native disalin ke chat. Cache native baru dihapus setelah hasil berhasil tersimpan di Stronghold. Jika app terhenti di antara penyimpanan intent dan enqueue native, intent dipulihkan saat brankas berikutnya dibuka. Selama pesan masih pending, pengiriman baru/perubahan sesi pada percakapan itu dibatasi agar pekerjaan tidak tumpang tindih.
 
-Konfigurasi Gateway lain tetap memakai jalur sebelumnya. Background delivery ini berlaku pada **Android** dan membutuhkan relay yang disediakan dalam `server/background-relay/`. Perilaku tombol X/tray Windows tidak diubah oleh patch ini.
+Konfigurasi Gateway lain tetap memakai jalur sebelumnya. Background delivery ini berlaku pada **Android** dan membutuhkan relay yang disediakan dalam `server/background-relay/`. Untuk Windows, hotfix v0.6.0 menambahkan close ke tray; lihat [catatan hotfix startup dan tray](RELEASE-0.6.0-HOTFIX.md).
 
 ## 1. Buat aplikasi Android di Firebase
 

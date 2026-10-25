@@ -1,6 +1,7 @@
 import { translate } from './i18n';
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 import type { BiometricStatus, HermesCapabilities, HermesEvent, HermesRequest, SshEvent, SshRequest } from '../types';
 
 export const nativeAvailable = () => isTauri();
@@ -11,8 +12,15 @@ export async function onDesktopClose(handler:()=>Promise<void>):Promise<()=>void
     await handler();
   });
 }
-export async function destroyWindow():Promise<void> {
-  requireNative(); await getCurrentWindow().destroy();
+export async function onDesktopQuit(handler:()=>Promise<void>):Promise<()=>void> {
+  if (!nativeAvailable() || /Android/i.test(navigator.userAgent)) return ()=>{};
+  return listen('warren://quit-requested',()=>{void handler();});
+}
+export async function hideWindow():Promise<void> {
+  requireNative(); await invoke('desktop_hide');
+}
+export async function quitApplication():Promise<void> {
+  requireNative(); await invoke('desktop_quit');
 }
 function requireNative() {
   if (!nativeAvailable()) throw new Error(translate("Use Warren on Windows or Android to connect to your servers.", "Koneksi asli tersedia di aplikasi Tauri. Browser ini hanya pratinjau tampilan."));
