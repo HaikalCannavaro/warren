@@ -1,0 +1,85 @@
+/* A pixel cutaway: bright turf, warm earth, recessed rooms and hard-edged depth. */
+.living-world{--burrow-room:#352319;--burrow-wall:#d3a16a;--burrow-wall-dark:#8c603c;--burrow-floor:#96653f;position:absolute;top:0;left:0;transform-origin:top left;isolation:isolate;margin:0;min-width:0;overflow:hidden;background:var(--habitat-soil);border:2px solid var(--habitat-arch);clip-path:polygon(0 10px,10px 10px,10px 0,calc(100% - 10px) 0,calc(100% - 10px) 10px,100% 10px,100% calc(100% - 10px),calc(100% - 10px) calc(100% - 10px),calc(100% - 10px) 100%,10px 100%,10px calc(100% - 10px),0 calc(100% - 10px))}
+[data-theme="terracotta"] .living-world{--burrow-room:#53351f;--burrow-wall:#f1cb8a;--burrow-wall-dark:#a97141;--burrow-floor:#ba854f}
+.living-surface{position:relative;background:var(--habitat-sky);z-index:1}
+.living-world .living-room{position:relative;min-width:0}
+.living-world .room-meadow{padding-top:148px}
+.living-tree{position:absolute;top:0;left:50%;transform:translateX(-50%);width:230px;height:172px;pointer-events:none;z-index:1;filter:drop-shadow(6px 4px 0 #00000020)}
+.room-meadow:before,.room-meadow:after{content:"";position:absolute;top:106px;height:46px;width:40%;background:var(--habitat-grass-dark);clip-path:polygon(0 100%,0 50%,16% 50%,16% 28%,36% 28%,36% 4%,65% 4%,65% 35%,84% 35%,84% 65%,100% 65%,100% 100%)}
+.room-meadow:before{left:0}.room-meadow:after{right:0;transform:scaleX(-1)}
+.living-room-sign{position:relative;display:flex;align-items:center;gap:9px;z-index:3;background:#251d18;border:2px solid var(--burrow-wall);box-shadow:4px 4px 0 #170e0a65;padding:9px 11px;color:#f9e7c9;width:max-content;max-width:calc(100% - 28px);margin:0 auto;min-height:54px}
+.fleet-habitat .living-room-sign h4{font:600 14px/1.5 var(--observer-mono);margin:0;color:#fff1d6;letter-spacing:.1px}
+.living-room-sign span{font:11px/1.5 var(--observer-mono);letter-spacing:.6px;color:#d4c1a4;display:block}
+.living-room-sign>b{font:12px var(--observer-mono);color:#fff1d6;background:#59402a;border:1px solid #94704b;padding:3px 5px;margin-left:3px}
+.fleet-habitat .living-room-sign>svg{color:#e9c78d;flex:none}
+.room-meadow>.living-room-content>.living-room-sign{position:absolute;top:22px;left:20px;margin:0}
+.room-meadow .living-room-sign span{color:#b6e87e}
+.room-sleep .living-room-sign span,.room-sleep-two .living-room-sign span{color:#d4c7ed}.room-standby .living-room-sign span{color:#afd5ff}.room-review .living-room-sign span{color:#ffe19b}.room-help .living-room-sign span{color:#ffb6a6}
+.living-slots{position:relative;display:grid;grid-template-columns:repeat(auto-fit,128px);justify-content:center;align-content:start;gap:17px 13px;padding:22px 16px 28px;min-height:182px;z-index:2}
+.room-meadow>.living-room-content>.living-slots{background:#71b83e;border-top:6px solid #b6e768;border-bottom:12px solid #4a7e2d;box-shadow:inset 0 5px 0 #8bcd4f,inset 0 -5px 0 #5b9a32;padding-top:24px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='103' height='79'%3E%3Cpath fill='%235692302e' d='M8 14h3v5H8zm3 3h5v2h-5zm54 31h3v6h-3zm3 4h5v2h-5z'/%3E%3Cpath fill='%23b4df6540' d='M42 25h6v2h-6zm41 44h8v2h-8z'/%3E%3C/svg%3E")}
+.living-slot{width:128px;height:150px}
+.living-room-empty{grid-column:1/-1;align-self:center;text-align:center;font:12px/1.7 var(--observer-mono);color:#dfc4a0;padding:24px 2px;min-height:123px}
+.room-meadow .living-room-empty{color:#153c23}
+.living-earth{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-items:start;row-gap:22px;position:relative;padding:40px 24px 54px;background:var(--habitat-soil);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath fill='%23efc98b20' d='M4 6h6v2H4zm26 22h4v2h-4z'/%3E%3Cpath fill='%23170e0a35' d='M18 16h4v2h-4zm22 26h4v2h-4z'/%3E%3C/svg%3E");border-top:10px solid #a67546;box-shadow:inset 0 5px 0 #d5aa70,inset 0 -12px 0 #21150f40}
+.living-earth>.living-room{z-index:2;border:0;background:none;box-shadow:none;clip-path:none;padding:0;min-height:300px}
+.living-earth>.room-standby{grid-row:1;grid-column:1/7;margin:8px 24px 0 0}
+.living-earth>.room-review{grid-row:1;grid-column:8/13;margin:104px 0 0 0}
+.living-earth>.room-help{grid-row:2;grid-column:2/8;margin:0 52px 0 0}
+.living-earth>.room-sleep{grid-row:2;grid-column:9/13;margin:92px 0 0 -8px}
+.living-earth>.room-sleep-two{grid-row:3;grid-column:5/11;margin:32px 50px 0 0}
+.living-earth .living-room-sign{margin-top:0;min-height:var(--room-header-height,60px)}
+.living-surface>.room-arrival{padding:20px;background:var(--panel);border-bottom:2px solid var(--burrow-wall)}
+.room-arrival>.living-room-content{position:static;width:auto}
+.living-room-content{position:absolute;left:28px;top:48px;width:calc(100% - 56px)}
+.room-meadow>.living-room-content{position:static;width:auto}
+.living-earth .living-slots{grid-template-columns:repeat(var(--room-columns,1),128px);padding-bottom:36px}
+.living-earth .living-room-empty{width:144px;max-width:144px;min-height:124px;justify-self:center}
+.living-room-content[data-columns="2"] .living-slot:last-child:nth-child(odd){grid-column:1/-1;justify-self:center}
+.living-bed{position:absolute;left:29%;bottom:12px;width:34%;height:13px;background:#d9b36c;box-shadow:8px -5px 0 -2px #f1d58c,-3px 4px 0 #855b32;clip-path:polygon(0 40%,8% 40%,8% 15%,30% 15%,30% 0,56% 0,56% 20%,89% 20%,89% 40%,100% 40%,100% 70%,83% 70%,83% 100%,42% 100%,42% 83%,0 83%);opacity:.65;pointer-events:none}
+.living-roots{position:absolute;top:-10px;left:50%;width:68%;height:38px;transform:translateX(-50%);background:#6b442c;clip-path:polygon(47% 0,54% 0,57% 28%,79% 39%,96% 71%,100% 100%,78% 65%,55% 51%,51% 100%,46% 100%,46% 48%,24% 66%,0 100%,9% 61%,34% 29%);pointer-events:none}
+.living-tunnels{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+.living-tunnel-shadow,.living-tunnel-wall,.living-tunnel-rim,.living-tunnel-inner-shadow,.living-tunnel-air{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.living-tunnel-shadow{stroke:#21140e;stroke-width:38px;opacity:.4}.living-tunnel-wall{stroke-width:36px}.living-tunnel-rim{stroke-width:30px}.living-tunnel-inner-shadow{stroke:#23150f;stroke-width:22px}.living-tunnel-air{stroke:var(--burrow-room);stroke-width:18px}
+.living-trunk-wall,.living-trunk-air{fill:none;stroke-linecap:round;stroke-linejoin:round}.living-trunk-wall{stroke:var(--burrow-wall);stroke-width:40px}.living-trunk-air{stroke:var(--burrow-room);stroke-width:28px}
+.cavity-floor{fill:none;stroke:var(--burrow-floor);stroke-width:2.5px;stroke-linejoin:round;stroke-linecap:round;opacity:.6}
+.living-actors{position:absolute;inset:0;z-index:4;pointer-events:none}
+.living-world .living-actor.habitat-resident{position:absolute;top:0;left:0;max-width:none;width:128px;padding:0;margin:0;text-align:center;pointer-events:auto;will-change:transform}
+.living-actor:not([data-ready="true"]){opacity:0;pointer-events:none}
+.living-world .living-actor .habitat-rabbit-button{flex-direction:column;gap:0;padding:0;width:100%;background:none;border-radius:0}
+.living-world .living-actor .fleet-rabbit{width:128px;height:auto;max-width:100%;margin:0;aspect-ratio:56/48}
+.living-world .living-actor .habitat-nameplate{margin-top:-9px;min-width:104px;padding:5px 6px;gap:2px;border-width:1px;box-shadow:3px 3px 0 #170e0a55}
+.living-world .living-actor .habitat-nameplate>strong{font-size:12px;letter-spacing:.5px}
+.living-world .living-actor .habitat-resident-status{font-size:11px;gap:4px}
+.living-trip{display:none;font:11px/1.4 var(--observer-mono);color:#f6ddae}.living-actor[data-walking="true"] .living-trip{display:block}
+.living-world .living-actor .habitat-rabbit-button:hover .fleet-rabbit{transform:none}
+.living-arrived,.living-walker{display:block;width:100%}.living-walker{display:none}
+.living-actor[data-walking="true"] .living-arrived{display:none}.living-actor[data-walking="true"] .living-walker{display:block}
+.living-walker>.fleet-rabbit{transform:scaleX(var(--rabbit-facing,1))!important}
+.pose-walking .rabbit-awake{animation:burrow-trot .32s steps(1,end) infinite;transform-box:fill-box;transform-origin:center}
+.pose-walking .rabbit-foot-front{animation:burrow-step-front .32s steps(1,end) infinite}.pose-walking .rabbit-foot-back{animation:burrow-step-back .32s steps(1,end) infinite}
+.living-actor[data-zone="meadow"][data-walking="false"] .living-arrived{animation:burrow-graze 10s steps(5,end) infinite;animation-delay:var(--rabbit-delay);animation-play-state:var(--habitat-running)}
+.living-actor[data-zone="meadow"][data-walking="false"] .living-arrived>.fleet-rabbit{animation:burrow-roam-eat 10s steps(1,end) infinite;animation-delay:var(--rabbit-delay);animation-play-state:var(--habitat-running)}
+.living-actor[data-zone="meadow"][data-walking="false"] .living-walker{display:block;position:absolute;top:0;left:0;animation:burrow-graze 10s steps(5,end) infinite,burrow-roam-walk 10s steps(1,end) infinite;animation-delay:var(--rabbit-delay);animation-play-state:var(--habitat-running)}
+.habitat-population{display:block;margin:0 20px 13px;color:var(--menu-icon);font:11px/1.7 var(--observer-mono);letter-spacing:.7px}
+@keyframes burrow-trot{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
+@keyframes burrow-step-front{0%,100%{transform:translateX(0)}50%{transform:translateX(2px)}}
+@keyframes burrow-step-back{0%,100%{transform:translateX(1px)}50%{transform:translateX(-1px)}}
+@keyframes burrow-graze{0%,15%,100%{transform:translateX(0)}35%,50%{transform:translateX(8px)}70%,85%{transform:translateX(-8px)}}
+@keyframes burrow-roam-eat{0%,15%,35%,50%,70%,85%,100%{opacity:1}16%,34%,51%,69%,86%,99%{opacity:0}}
+@keyframes burrow-roam-walk{0%,15%,35%,50%,70%,85%,100%{opacity:0}16%,34%,51%,69%,86%,99%{opacity:1}}
+/* The artwork keeps one desktop layout; narrow screens only scale its wrapper. */
+.living-map{min-width:0;margin:0 20px}
+.living-zoom{position:sticky;top:0;z-index:6;display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:0 0 11px;padding:3px 0;background:var(--panel,var(--bg));color:var(--muted)}
+.living-zoom>span{margin-right:auto;font:12px/1.6 var(--observer-mono)}
+.living-zoom>button{display:inline-flex;align-items:center;justify-content:center;min-width:36px;min-height:36px;padding:6px 9px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--text);font:12px/1.5 var(--observer-mono)}
+.living-zoom>button:hover:not(:disabled),.living-zoom>button[aria-pressed="true"]{border-color:var(--menu-icon);color:var(--menu-icon);background:var(--teal-dim)}
+.living-zoom>output{min-width:42px;text-align:center;font:12px/1.5 var(--observer-mono)}
+.living-viewport{width:100%;max-width:1040px;margin:0 auto;overflow:hidden;scroll-margin-block-start:60px}
+.living-viewport.is-zoomed{max-height:60dvh;overflow:auto;overscroll-behavior:contain;touch-action:pan-x pan-y}
+.living-viewport:focus-visible{outline:2px solid var(--menu-icon);outline-offset:3px}
+.living-stage{position:relative;flex:none}
+@media(max-width:700px){
+  .living-map{margin:0 10px}.habitat-population{margin-left:15px;margin-right:15px}
+  .living-zoom{gap:4px}.living-zoom>span{display:none}.living-zoom>button{min-width:40px;min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){.living-actor .living-arrived,.living-actor .living-arrived>.fleet-rabbit{animation:none!important;opacity:1!important}.living-actor[data-zone="meadow"] .living-walker{display:none!important}.living-actor{will-change:auto}}

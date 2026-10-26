@@ -15,7 +15,7 @@ const props = () => ({roster,sourceName:'Orchestrator VPS',connected:true,update
 beforeEach(()=>{setLanguage('en');});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.restoreAllMocks();});
 
-it('shows one orchestrator above ten specialists, with task-driven eating and sleeping poses',()=>{
+it('shows one orchestrator and ten specialists in a shared habitat, with task-driven eating and sleeping poses',()=>{
   const view=render(<FleetHabitat {...props()}/>);
   expect(within(screen.getByRole('group',{name:'Fleet rabbits'})).getAllByRole('button')).toHaveLength(11);
   expect(view.container.querySelectorAll('.is-orchestrator')).toHaveLength(1);

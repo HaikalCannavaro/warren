@@ -1,5 +1,7 @@
 # Pixel Warren — fleet, status, dan sumber data
 
+> Catatan tahap sebelumnya. Tata letak dan gerakan terbaru mengikuti [Living Burrow](LIVING-BURROW.md); status, data, dan mode arsip tetap berlaku.
+
 ## Hierarki dan visual
 
 Observer menampilkan satu sarang **pixel art** dengan **11 kelinci**: Leveret

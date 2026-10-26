@@ -1,6 +1,6 @@
 # Habitat fleet di Observer
 
-> Arsip tahap desain sebelumnya. Implementasi terbaru memakai pixel art, 11 agen, lima status, dan dua cabang simetris: lihat [PIXEL-FLEET.md](PIXEL-FLEET.md).
+> Arsip tahap desain sebelumnya. Implementasi terbaru memakai habitat pixel art 2.5D dengan area menurut status dan perpindahan berjalan: lihat [LIVING-BURROW.md](LIVING-BURROW.md).
 
 Fleet Roster kini tampil sebagai sarang kelinci bergaya **clay 2.5D**, dengan
 shading SVG, bayangan, liang bertingkat, dan jalur terowongan bersama. Grafik

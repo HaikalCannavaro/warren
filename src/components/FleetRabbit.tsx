@@ -1,6 +1,6 @@
 import type { FleetState } from '../lib/observer';
 
-export type RabbitPose = FleetState['state'] | 'unknown';
+export type RabbitPose = FleetState['state'] | 'unknown' | 'walking';
 
 const PALETTE: Record<string, string> = {
   o: 'var(--rabbit-outline)', f: 'var(--rabbit-fur)', l: 'var(--rabbit-light)', s: 'var(--rabbit-shade)',
@@ -128,8 +128,8 @@ export function FleetRabbit({ pose, miniature = false, leader = false }: { pose:
       <path d="M37 30h4v1h2v5h-2v1h-4v-2h-1v-3h1Z" fill="var(--rabbit-shade)"/>
       <path d="M38 31h3v1h1v3h-4Z" fill="var(--rabbit-light)"/>
       <Pixels art={BODY} x={15} y={25}/>
-      <path d="M18 38h8v1h1v2H16v-2h2Zm13 0h7v1h2v2H29v-2h2Z" fill="var(--rabbit-outline)"/>
-      <path d="M18 38h6v2h-7v-1h1Zm13 0h6v1h2v1H30v-1h1Z" fill="var(--rabbit-light)"/>
+      <g className="rabbit-foot-front"><path d="M18 38h8v1h1v2H16v-2h2Z" fill="var(--rabbit-outline)"/><path d="M18 38h6v2h-7v-1h1Z" fill="var(--rabbit-light)"/></g>
+      <g className="rabbit-foot-back"><path d="M31 38h7v1h2v2H29v-2h2Z" fill="var(--rabbit-outline)"/><path d="M31 38h6v1h2v1H30v-1h1Z" fill="var(--rabbit-light)"/></g>
       <path d="M22 27h13v2h-4v2h-4v-2h-5Z" fill="var(--agent-color)"/><path d="M32 29h3v5h-2v-3h-1Z" fill="var(--agent-color)"/>
       <g className="rabbit-head">
         <g className="rabbit-ear rabbit-ear-back"><path d="M31 17V4h1V2h4v2h1v12h-2v3Z" fill="var(--rabbit-outline)"/><path d="M32 4h4v11h-2v2h-2Z" fill="var(--rabbit-fur)"/><path d="M33 5h2v9h-2Z" fill="#D99896"/></g>

@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CirclePause, CirclePlay, Clock3, ClipboardCheck, Flag, Hourglass, Leaf, Moon, Rabbit, Radio, Sprout } from 'lucide-react';
 import { FLEET_AGENTS, type FleetAgent, type FleetState } from '../lib/observer';
 import { FLEET_ROLES, FLEET_SPECIALISTS, ORCHESTRATOR } from '../lib/fleet';
 import { useI18n } from '../lib/i18n';
 import { Dialog } from './Dialog';
-import { FleetRabbit, type RabbitPose } from './FleetRabbit';
-import { HabitatTunnels } from './HabitatTunnels';
+import { FleetRabbit } from './FleetRabbit';
+import { LivingBurrow } from './LivingBurrow';
+import type { BurrowPose } from '../lib/burrowHabitat';
 import '../fleet-habitat.css';
 
 export const HABITAT_STALE_MS = 60000;
@@ -40,33 +41,17 @@ export function FleetHabitat({ roster, sourceName, connected, updatedAt, error, 
   }, [updatedAt, visible]);
   const stale = roster !== null && (!connected || error || updatedAt === null || now - updatedAt >= HABITAT_STALE_MS);
   const animationPaused = paused || !visible || !inView || reducedMotion || stale || loading || roster === null || selected !== null;
-  const poseFor = (agent: FleetAgent): RabbitPose => roster?.find(item => item.agent === agent)?.state ?? 'unknown';
-  const statusFor = (pose: RabbitPose) => pose === 'working' ? 'WORKING' : pose === 'review' ? 'IN REVIEW' : pose === 'blocked' ? 'BLOCKED' : pose === 'queued' ? 'QUEUED' : pose === 'idle' ? 'IDLE' : t('AWAITING DATA', 'MENUNGGU DATA');
-  const actionFor = (pose: RabbitPose) => pose === 'working' ? t('Carrot break on the job', 'Makan wortel sambil bekerja') : pose === 'idle' ? t('Resting until the next task', 'Tidur sambil menunggu tugas') : pose === 'review' ? t('A little reading before review', 'Membaca sambil menunggu review') : pose === 'blocked' ? t('Waiting for a helping paw', 'Menunggu bantuan untuk lanjut') : pose === 'queued' ? t('Ready and waiting for dispatch', 'Siap dan menunggu giliran dispatch') : t('Waiting for the orchestrator', 'Menunggu data orkestrator');
+  const poseFor = (agent: FleetAgent): BurrowPose => roster?.find(item => item.agent === agent)?.state ?? 'unknown';
+  const statusFor = (pose: BurrowPose) => pose === 'working' ? 'WORKING' : pose === 'review' ? 'IN REVIEW' : pose === 'blocked' ? 'BLOCKED' : pose === 'queued' ? 'QUEUED' : pose === 'idle' ? 'IDLE' : t('AWAITING DATA', 'MENUNGGU DATA');
+  const actionFor = (pose: BurrowPose) => pose === 'working' ? t('Carrot break on the job', 'Makan wortel sambil bekerja') : pose === 'idle' ? t('Resting until the next task', 'Tidur sambil menunggu tugas') : pose === 'review' ? t('A little reading before review', 'Membaca sambil menunggu review') : pose === 'blocked' ? t('Waiting for a helping paw', 'Menunggu bantuan untuk lanjut') : pose === 'queued' ? t('Ready and waiting for dispatch', 'Siap dan menunggu giliran dispatch') : t('Waiting for the orchestrator', 'Menunggu data orkestrator');
   const selectedState = roster?.find(item => item.agent === selected);
   const selectedPose = selected ? poseFor(selected) : 'unknown';
   const clock = updatedAt === null ? '—' : new Intl.DateTimeFormat(locale, { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(updatedAt).replace(/\./g, ':');
   return <>
     <div ref={root} className="fleet-habitat" data-motion={animationPaused ? 'paused' : 'running'} data-freshness={stale ? 'stale' : roster === null ? 'unknown' : 'current'} inert={selected !== null}>
-      <div className="habitat-intro"><div><span className="habitat-eyebrow"><Sprout size={13}/>{t('INSIDE THE WARREN', 'DI DALAM WARREN')}</span><h3>{t('A home for every agent.', 'Sarang untuk setiap agen.')}</h3><p>{t('Little rabbits. Real work. One connected burrow.', 'Kelinci kecil, pekerjaan nyata, satu sarang bersama.')}</p></div><div className="habitat-controls"><span className={`habitat-data-state ${stale ? 'is-stale' : ''}`}><i/>{stale ? t('STALE DATA', 'DATA KEDALUWARSA') : roster === null ? t('AWAITING DATA', 'MENUNGGU DATA') : loading ? t('REFRESHING', 'MEMPERBARUI') : t('FLEET CONNECTED', 'ARMADA TERHUBUNG')}</span><button type="button" className="habitat-motion-button" aria-pressed={paused} disabled={reducedMotion} onClick={() => setPaused(value => !value)} title={reducedMotion ? t('Reduced motion follows your device preference.', 'Gerakan dikurangi sesuai pengaturan perangkat.') : undefined}>{paused || reducedMotion ? <CirclePlay size={16}/> : <CirclePause size={16}/>}<span>{reducedMotion ? t('Reduced motion', 'Gerakan dikurangi') : paused ? t('Resume motion', 'Lanjutkan animasi') : t('Pause motion', 'Jeda animasi')}</span></button></div></div>
-      <div className="habitat-world">
-        <div className="habitat-landscape" aria-hidden="true"><span className="habitat-moon"/><span className="habitat-hill hill-back"/><span className="habitat-hill hill-front"/><span className="habitat-tree tree-one"/><span className="habitat-tree tree-two"/><span className="habitat-star star-one"/><span className="habitat-star star-two"/><span className="habitat-surface-label"><Leaf size={12}/> THE WARREN</span></div>
-        <div className="habitat-earth">
-          <HabitatTunnels/>
-          <div className="habitat-residents" role="group" aria-label={t('Fleet rabbits', 'Kelinci armada')}>{FLEET_AGENTS.map((agent, index) => {
-            const pose = poseFor(agent);
-            const tasks = roster?.find(item => item.agent === agent)?.tasks ?? [];
-            return <article key={agent} className={`habitat-resident peer-${agent.toLowerCase()} ${agent === ORCHESTRATOR ? 'is-orchestrator' : 'is-specialist'}`} style={{ '--rabbit-delay': `${index * -.37}s` } as CSSProperties}>
-              {agent === ORCHESTRATOR && <span className="habitat-leader-label">{t('1 ORCHESTRATOR', '1 ORKESTRATOR')} · {FLEET_SPECIALISTS.length} {t('SPECIALISTS', 'SPESIALIS')}</span>}
-              <button type="button" className="habitat-rabbit-button" aria-label={`${agent.toUpperCase()} · ${statusFor(pose)}${stale ? ` · ${t('last known status', 'status terakhir')}` : ''}`} onClick={() => setSelected(agent)}>
-                <FleetRabbit pose={pose} leader={agent === ORCHESTRATOR}/><span className="habitat-nameplate"><strong>{agent.toUpperCase()}</strong><span className={`habitat-resident-status state-${pose}`}><i/>{statusFor(pose)}</span></span>
-              </button>
-              {agent !== ORCHESTRATOR && <span className="habitat-role">{t(...FLEET_ROLES[agent].label)}{tasks.length > 1 && <span> · {tasks.length} {t('tasks','tugas')}</span>}</span>}
-            </article>;
-          })}</div>
-          <div className="habitat-soil-detail" aria-hidden="true"><span/><span/><span/></div>
-        </div>
-      </div>
+      <div className="habitat-intro"><div><span className="habitat-eyebrow"><Sprout size={13}/>{t('INSIDE THE WARREN', 'DI DALAM WARREN')}</span><h3>{t('A home for every agent.', 'Sarang untuk setiap agen.')}</h3><p>{t('Every status has a place. Every rabbit knows the way.', 'Setiap status punya tempat. Setiap kelinci tahu jalannya.')}</p></div><div className="habitat-controls"><span className={`habitat-data-state ${stale ? 'is-stale' : ''}`}><i/>{stale ? t('STALE DATA', 'DATA KEDALUWARSA') : roster === null ? t('AWAITING DATA', 'MENUNGGU DATA') : loading ? t('REFRESHING', 'MEMPERBARUI') : t('FLEET CONNECTED', 'ARMADA TERHUBUNG')}</span><button type="button" className="habitat-motion-button" aria-pressed={paused} disabled={reducedMotion} onClick={() => setPaused(value => !value)} title={reducedMotion ? t('Reduced motion follows your device preference.', 'Gerakan dikurangi sesuai pengaturan perangkat.') : undefined}>{paused || reducedMotion ? <CirclePlay size={16}/> : <CirclePause size={16}/>}<span>{reducedMotion ? t('Reduced motion', 'Gerakan dikurangi') : paused ? t('Resume motion', 'Lanjutkan animasi') : t('Pause motion', 'Jeda animasi')}</span></button></div></div>
+      <span className="habitat-population">{t('1 ORCHESTRATOR','1 ORKESTRATOR')} {"\u00b7"} {FLEET_SPECIALISTS.length} {t('SPECIALISTS','SPESIALIS')} {"\u00b7"} {t('ONE SHARED HOME','SATU SARANG BERSAMA')}</span>
+      <LivingBurrow poses={Object.fromEntries(FLEET_AGENTS.map(agent=>[agent,poseFor(agent)])) as Record<FleetAgent,BurrowPose>} statusFor={statusFor} onSelect={setSelected} running={!animationPaused} reducedMotion={reducedMotion} stale={stale}/>
       <div className="habitat-legend"><span><Flag size={14}/>{t('Blocked → asking for help','Blocked → butuh bantuan')}</span><span><Leaf size={14}/>{t('Working → eating', 'Bekerja → makan')}</span><span><ClipboardCheck size={14}/>{t('Review → reading','Review → membaca')}</span><span><Hourglass size={14}/>{t('Queued → waiting','Antre → menunggu')}</span><span><Moon size={14}/>{t('Idle → sleeping', 'Idle → tidur')}</span><span className="habitat-tap-hint"><Rabbit size={14}/>{t('Tap a rabbit to meet the agent', 'Ketuk kelinci untuk melihat agen')}</span></div>
       {stale && <p className="habitat-stale-note" role="status">{t('Showing the last known fleet. Motion is paused until fresh data arrives.', 'Menampilkan status armada terakhir. Animasi dijeda sampai data baru diterima.')}</p>}
     </div>

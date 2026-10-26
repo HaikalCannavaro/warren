@@ -16,7 +16,7 @@ Ruang kerja personal berbasis **Tauri 2 + React + TypeScript** untuk terminal SS
 
 Menu Agent Chat, pengelolaan koneksi Agent, dan pengaturan Background delivery telah dihapus. Sinkronisasi otomatis serta worker pengiriman Android dihentikan. Data chat dan profil lama tetap disimpan di brankas untuk kompatibilitas upgrade; penghapusan fitur tidak menghapus riwayat, membatalkan task Hermes, atau menghentikan layanan relay VPS. Modul transport lama masih ada sebagai kode kompatibilitas, tetapi tidak tersedia dari navigasi aplikasi. [Catatan perubahan](docs/SCHEDULER-AND-WORKSPACE-UPDATE.md).
 
-Fleet Roster Observer kini memiliki **habitat kelinci pixel art beranimasi**: Leveret di tengah atas, sepuluh spesialis termasuk Nexus di bawahnya, lima status kerja, dan detail tugas lewat ketukan. [Panduan Pixel Fleet](docs/PIXEL-FLEET.md). Runbooks belum diimplementasikan.
+Fleet Roster Observer memadukan **kelinci pixel art dan liang organik halus 2.5D**: satu Leveret dan sepuluh spesialis berpindah menurut status dengan animasi berjalan dan detail tugas lewat ketukan. Total selalu lima liang. Liang Teduh berada di tengah bawah dan terhubung ke Liang Mimpi serta Pos Bantuan; penghuni Idle dibagi acak dan stabil tanpa diacak ulang saat polling. Rongga dan tunnel memakai satu bidang tanah agar sambungan dan warnanya menyatu, dengan lubang masuk di rumput. [Panduan Living Burrow](docs/LIVING-BURROW.md). Runbooks belum diimplementasikan.
 
 ## Tampilan dan bahasa
 

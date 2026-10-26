@@ -1,5 +1,64 @@
 # Pengujian Warren
 
+## Liang dan tunnel menyatu dengan lubang rumput - 27 Oktober 2026
+
+- **466 tes frontend / 39 berkas lulus** dengan `npm test -- --maxWorkers=2`. Termasuk kurva rongga halus, containment pada lekukan diagonal, sambungan Teduh ke Mimpi dan Pos Bantuan, pemilihan jalur terpendek, serta flare di pertemuan tunnel/liang yang tidak menggandakan jalur bersama atau membuat lubang fiktif.
+- Test perjalanan penuh tetap memeriksa perpindahan, pause/resume dan cleanup dengan jam simulasi 30 detik. Batas eksekusi test jsdom ini menjadi 15 detik setelah batas awal 5 detik tidak cukup ketika suite dan build berjalan bersamaan. Semua assertion dan langkah simulasi 50 ms dipertahankan; ini bukan timeout aplikasi.
+- TypeScript dan build produksi frontend lulus. Tidak ada dependency atau aset raster baru. Peringatan chunk utama Vite di atas 500 kB tetap ada. Layout numerik memiliki memo terbatas 256 entri.
+- Browser desktop 1280 px dan mobile 390 px: path rongga, tunnel dan viewBox identik; selalu lima liang. Batas papan, sprite, nameplate dan alas tidur berada dalam kontur dengan margin 4 px, tanpa overlap dan tanpa overflow horizontal. Pada mobile 320 px dengan sebelas Idle, pembagian tetap 6-5 dan semua 21 objek yang diperiksa tetap di dalam kontur serta tidak bertumpuk.
+- Dinding/rim/lantai digambar sekali per lapisan pada gabungan bentuk rongga dan tunnel. Material dan kontur berbagi mask SVG sehingga warna serta batasnya tidak terpotong di sambungan. Detail mulut Ruang Telaah dan lubang oval di rumput diperiksa secara visual. Dark dan Terracotta diperiksa; console preview tanpa error/warning.
+- Screenshot memakai fixture lokal yang tidak dikemas. Auto-poll tetap 10 detik, tanpa mutasi VPS. Native/APK, perangkat fisik dan VPS nyata belum diuji pada revisi ini. Catatan berikut adalah hasil tahap sebelumnya.
+
+## Lima liang dengan tunnel acuan dipertahankan - 27 Oktober 2026
+
+- **463 tes frontend / 39 berkas lulus** dengan `npm test -- --maxWorkers=2`. Tes rute memastikan empat jalur asli identik sebelum dan sesudah penambahan liang kelima, hanya ada satu sambungan turun dari Mimpi ke Teduh, tidak ada cabang tambahan menuju liang baru, dan kelinci berjalan melalui sambungan tersebut dalam dua arah.
+- Dua tes tambahan memeriksa proporsi lebar untuk satu/dua penghuni dan jumlah yang selalu lima liang, termasuk ketika sebelas agen belum memiliki data. Tes kapasitas mencakup 0-11 penghuni, seluruh kontur, centering baris terakhir, header, sprite, nameplate, dan bedding. Pada keadaan tanpa data, teras berada di permukaan.
+- TypeScript dan build produksi frontend lulus. Peringatan chunk utama Vite di atas 500 kB tetap ada. Pada run pengembangan, tes animasi sempat melewati batas 5 detik; frame kini dijalankan dalam satu batch pengujian dengan langkah waktu tetap 50 ms dan pemeriksaan pause/resume, kedatangan, serta cleanup tetap dipertahankan. Full suite terakhir lulus.
+- Browser desktop 1280 px dan mobile 390 px menghasilkan path tunnel dan viewBox yang identik. Proporsi liang dan jalur tidak disusun ulang pada mobile. Pengukuran header mengabaikan noise subpiksel dari zoom agar geometri tidak berubah saat skala berubah.
+- Browser mobile 320 px dengan semua sebelas Idle: pembagian 6-5, nol avatar/nameplate keluar kontur (margin 4 px), nol overlap, dan nol overflow horizontal dokumen. Pada sumber belum tersedia, tetap lima rongga dan sebelas kelinci seluruhnya berada dalam teras permukaan. Console preview tanpa error/warning.
+- Screenshot memakai data uji lokal yang tidak dimasukkan ke source produksi. Query dan auto-poll 10 detik tetap, tanpa mutasi VPS. Native/APK, perangkat fisik, dan VPS nyata belum diuji. Hasil berikut merupakan catatan tahap sebelumnya dan desainnya telah diganti oleh revisi ini.
+
+## Akar tunggang dan liang tidur terbawah - 27 Oktober 2026
+
+- **461 tes frontend / 39 berkas lulus** dengan `npm test -- --maxWorkers=2`. Lima tes tambahan serta revisi tes geometri memeriksa satu batang tengah hingga dasar, cabang ke semua liang, sambungan tetangga pada kedua sisi, jalur tetangga terpendek yang sama dengan gambar, Teras Koneksi opsional, dan penolakan jalur bila ruang tengah terhalang. Tes perpindahan, pause/resume, zoom, dan kapasitas tetap lulus.
+- TypeScript dan build produksi frontend lulus. Peringatan ukuran chunk utama Vite di atas 500 kB tetap ada. Tidak ada dependency baru.
+- Browser desktop 1280 px dan mobile 390 px mengonfirmasi path batang, seluruh jaringan, dan viewBox identik. Dua liang Idle terletak di bawah seluruh liang kerja. Pemeriksaan visual memperlihatkan sambungan di bibir dan lantai liang terbuka utuh. Tema Dark dan Terracotta diperiksa.
+- Pada mobile 320 px dengan sebelas agen Idle, pembagian tetap 6-5; semua bingkai sprite/nameplate berada di dalam kontur udara dengan margin 4 px, nol tumpang tindih, dan nol overflow horizontal dokumen. Batang tengah tetap terhubung setelah kapasitas liang membesar.
+- Screenshot memakai data uji lokal yang tidak disertakan di source produksi. Auto-poll tetap 10 detik, tanpa mutasi VPS. Native/APK, perangkat fisik, dan VPS nyata belum diuji pada revisi ini. Catatan berikut adalah hasil tahap sebelumnya.
+
+## Dua liang Idle dan kapasitas kontur - 27 Oktober 2026
+
+- **456 tes frontend / 39 berkas lulus** dengan `npm test -- --maxWorkers=2`. Sebanyak 17 tes tambahan mencakup pembagian acak yang stabil dan seimbang, semua populasi 0-11 pada enam variasi kontur, lekukan yang tidak terdeteksi dengan cek empat sudut saja, serta containment komponen untuk seluruh penghuni pada Idle, Queued, Review, Blocked, dan Awaiting Data.
+- TypeScript dan build produksi frontend lulus. Satu tes animasi mengalami timeout pada run paralel bawaan; seluruh suite lulus ketika worker dibatasi dua. Peringatan chunk utama Vite di atas 500 kB masih ada.
+- Browser dengan data uji memverifikasi sebelas Idle terbagi 6-5. Seluruh bingkai sprite dan nameplate berada dalam kontur udara SVG dengan margin 4 px, nol tumpang tindih dan nol overflow horizontal dokumen. Uji browser sebelas Review, Queued, dan Blocked pada lebar 320 px juga memenuhi pemeriksaan tersebut.
+- Desktop 1280 px dan mobile 320 px menghasilkan path kontur yang identik dan pembagian penghuni yang sama. Mobile hanya memperkecil kanvas; label ikut mengecil pada Pas layar dan bisa dibaca pada 1:1. Tidak ada error/warning console pada preview pemeriksaan kapasitas.
+- Pembagian Idle tidak berubah saat polling identik; keanggotaan yang berubah diseimbangkan dengan pemindahan minimum. Ukuran rongga disesuaikan terhadap grid dan papan; tidak ada clipping avatar untuk menutupi overflow.
+- Fixture dan screenshot memakai data uji lokal, dikecualikan dari source produksi. Poll tetap 10 detik, tidak ada mutasi VPS. Native/APK, perangkat fisik, dan VPS nyata belum diuji pada revisi ini. Catatan berikut merupakan hasil tahap sebelumnya.
+
+## Skala mobile tanpa perubahan bentuk - 26 Oktober 2026
+
+- **439 tes frontend / 38 berkas lulus.** Dua tes baru memastikan kanvas desktop tetap utuh ketika diperkecil, kontrol Fit/1:1 bekerja, dan perubahan zoom tidak mengulang atau membatalkan perjalanan. Tujuh tes komponen LivingBurrow dijalankan ulang setelah penyempurnaan tombol dan scrolling terakhir, semuanya lulus.
+- TypeScript dan build frontend diperiksa. Kanvas logis berukuran tetap 1040 px; tidak ada pergantian susunan liang atau ukuran sprite khusus mobile.
+- Perbandingan browser desktop 1280 px dengan mobile 390 px mengonfirmasi path terowongan, kontur rongga, dan viewBox identik. Selisih geometri ternormalisasi kurang dari 0,001 px; overflow horizontal dokumen nol.
+- Mode Fit pada mobile menampilkan sekitar 32% pada lebar panel yang diuji. Mode 1:1 menampilkan font nama 12 px dan status 11 px dengan panning horizontal/vertikal native, sedangkan kontrol tetap berukuran normal. Teks pada mode Fit memang ikut diperkecil; gunakan zoom atau detail agen untuk membacanya.
+- Fixture dan screenshot memakai data uji lokal yang tidak masuk source produksi. Query/data, auto-poll 10 detik, dan native tidak berubah. Native/APK serta VPS nyata belum diuji pada tahap ini.
+
+## Rongga organik dan geometri terowongan - 26 Oktober 2026
+
+- Revisi visual mengganti ruangan persegi menjadi rongga berlekuk dengan ukuran, posisi, dan kedalaman berbeda. Mobile memakai rongga lebar berselang-seling agar nama 12 px dan status 11 px tetap terbaca.
+- **437 tes frontend / 38 berkas lulus.** Lima tes geometri baru memeriksa kontur deterministik, koneksi rongga desktop asimetris/mobile berselang-seling, jalur yang tidak memotong rongga lain, titik tikungan yang sama untuk gambar dan perjalanan, serta tidak mengarang jalur ketika pintu tidak tersedia.
+- TypeScript dan build produksi lulus. Kedua tema diperiksa pada revisi ini. Mobile 320 px dengan 11 agen idle memiliki 4 koneksi liang, nol nameplate bertumpuk, nol overflow horizontal, nama 12 px dan status 11 px. Fixture browser dipisahkan dari source produksi. Data/status, auto-poll 10 detik, dan query native tidak berubah.
+- Native/APK dan VPS sebenarnya belum diuji. Panduan terkini: [LIVING-BURROW.md](LIVING-BURROW.md). Hasil berikut adalah catatan tahap sebelumnya.
+
+## Living Burrow dan perjalanan antararea - 26 Oktober 2026
+
+- **432 tes frontend / 37 berkas lulus.** Sembilan tes domain/komponen baru menggantikan delapan tes geometri model lama. Mencakup pemetaan lima status ke area, sumber unknown terpisah, rute melewati pintu/poros, jarak berjalan dan arah, status berubah di tengah perjalanan, pause/resume, cleanup frame, reduced motion, serta data pertama tanpa perjalanan fiktif.
+- TypeScript dan build frontend produksi diperiksa. Pemeriksaan browser memakai fixture lokal di aplikasi dan preview komponen yang sama; fixture tidak disertakan dalam paket source.
+- Pada mobile 320 px dengan seluruh 11 agen idle, jumlah kelinci tetap 11, semuanya masuk Liang Mimpi, tidak ada nameplate saling tumpang tindih atau overflow horizontal dokumen. Nama tetap 12 px dan status 11 px. Habitat bertambah tinggi ketika banyak agen menempati satu area.
+- Kedua tema, label Indonesia/Inggris, slot sesuai status, serta perpindahan Working ke Blocked diperiksa di browser. Penanda perjalanan terlihat sebelum kelinci tiba pada Pos Bantuan.
+- Animasi ini menampilkan status dari Kanban; tidak mengendalikan worker atau menulis status task. Auto-poll tetap 10 detik. Native/APK serta VPS nyata belum diuji pada tahap ini; batas native paket sebelumnya tetap berlaku.
+- Panduan terkini: [LIVING-BURROW.md](LIVING-BURROW.md). Hasil berikut merupakan catatan tahap sebelumnya.
+
 ## Pixel Fleet, hierarki, dan lima status — 26 Oktober 2026
 
 - **431 tes frontend / 37 berkas lulus**, TypeScript lulus. Mencakup satu Leveret + sepuluh spesialis, Nexus/Frame di Burrow, role pengguna, prioritas blocked > running > review > queued > idle, mode arsip/cancellation, serta auto-poll default 10 detik tanpa overlap.

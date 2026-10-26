@@ -1,5 +1,7 @@
 # Paket Pixel Fleet Warren
 
+> Catatan tahap sebelumnya. Tata letak dan gerakan terbaru mengikuti [Living Burrow](LIVING-BURROW.md); status, data, dan mode arsip tetap berlaku.
+
 Perubahan ini melanjutkan paket habitat sebelumnya, dari baseline repository
 **v0.6.1 / `878bfb3c149fd05d8a0adc2c6f592c68665a85f8`**. Version metadata dan
 application ID `dev.harbor.workspace` tidak dinaikkan atau diganti.

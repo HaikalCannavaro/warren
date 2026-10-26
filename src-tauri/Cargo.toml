@@ -1,6 +1,6 @@
 [package]
 name = "harbor"
-version = "0.7.0"
+version = "0.7.1"
 description = "Warren — server workspace, fleet observability and schedules"
 authors = ["Warren contributors"]
 edition = "2021"

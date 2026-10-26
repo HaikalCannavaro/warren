@@ -1,6 +1,6 @@
 # Habitat Observer dan navigasi Settings
 
-> Arsip tahap desain sebelumnya. Implementasi terbaru memakai pixel art, 11 agen, lima status, dan dua cabang simetris: lihat [PIXEL-FLEET.md](PIXEL-FLEET.md).
+> Arsip tahap desain sebelumnya. Implementasi terbaru memakai habitat pixel art 2.5D dengan area menurut status dan perpindahan berjalan: lihat [LIVING-BURROW.md](LIVING-BURROW.md).
 
 Perubahan ini melanjutkan paket Scheduler dari baseline **v0.6.1**,
 `878bfb3c149fd05d8a0adc2c6f592c68665a85f8`. Versi dan application ID tetap.

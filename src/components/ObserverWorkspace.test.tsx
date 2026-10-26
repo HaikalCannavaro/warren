@@ -24,7 +24,7 @@ it('renders hardware and eleven roster residents with task-derived work states',
   expect(within(roster).getByText('FRAME')).toBeTruthy();
   expect(within(within(roster).getByText('FORGE').closest('article')!).getByText('BLOCKED')).toBeTruthy();
   expect(within(within(roster).getByText('ATLAS').closest('article')!).getByText('WORKING')).toBeTruthy();
-  expect(within(roster).getAllByText('IDLE')).toHaveLength(9);
+  expect(within(within(roster).getByRole('group',{name:'Fleet rabbits'})).getAllByText('IDLE')).toHaveLength(9);
 });
 it('changes the hardware source independently from the orchestrator',()=>{
   setup();fireEvent.click(screen.getByRole('combobox',{name:'Target Host'}));
@@ -42,7 +42,7 @@ it('filters task status and assignee and exposes explicit refresh and polling co
 });
 it('does not represent unavailable fleet data as idle agents or zero hardware readings',()=>{
   const data=dashboard();mock.dashboard.mockReturnValue({...data,hardware:{...empty,data:null},fleet:{...empty,data:null},tasks:{...empty,data:null}});
-  setup();expect(screen.queryByText('IDLE')).toBeNull();expect(within(screen.getByRole('group',{name:'Fleet rabbits'})).getAllByText('AWAITING DATA')).toHaveLength(11);
+  setup();expect(within(screen.getByRole('group',{name:'Fleet rabbits'})).queryByText('IDLE')).toBeNull();expect(within(screen.getByRole('group',{name:'Fleet rabbits'})).getAllByText('AWAITING DATA')).toHaveLength(11);
   expect(screen.queryByRole('progressbar',{name:'RAM'})).toBeNull();
 });
 it('does not read fleet data using an old SSH session after its profile endpoint was edited',()=>{
