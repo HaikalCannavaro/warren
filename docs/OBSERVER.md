@@ -1,5 +1,7 @@
 # Observer — fleet dan infrastruktur
 
+> Pembaruan roster/status terbaru: [Pixel Fleet](PIXEL-FLEET.md). Observer kini memakai 11 agen, antrean, mode arsip, dan auto-poll 10 detik; Burrow mengenali Frame dan Nexus.
+
 Observer adalah halaman awal Warren dan item pertama di sidebar maupun navigasi mobile. Ikon mata/HUD memakai SVG yang diberikan pengguna, dipakai bersama pada menu dan header. Panel, dropdown, ikon umum, dan angka mengikuti tema Warren Dark atau Terracotta; identitas spesialis serta indikator kesehatan tetap memiliki warna yang bermakna.
 
 ## Sumber data

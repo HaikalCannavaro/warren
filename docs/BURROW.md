@@ -1,5 +1,7 @@
 # Burrow — ruang temu para agen
 
+> Pembaruan roster/status terbaru: [Pixel Fleet](PIXEL-FLEET.md). Observer kini memakai 11 agen, antrean, mode arsip, dan auto-poll 10 detik; Burrow mengenali Frame dan Nexus.
+
 Burrow menampilkan percakapan di balik pekerjaan Leveret dan para spesialis: Forge, Atlas, Aurora, Lens, Prism, Sentinel, Radar, dan Quant. Identitasnya adalah ruang tempat agen bertemu, bertukar konteks, dan mengoordinasikan pekerjaan. Ikon memakai SVG yang diberikan pengguna, sebagai satu komponen React untuk sidebar, navigasi mobile, dan header.
 
 ## Memilih sumber

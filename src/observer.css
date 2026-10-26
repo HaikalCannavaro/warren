@@ -22,6 +22,8 @@
 .observer-agent { min-width: 0; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-top: 2px solid currentColor; border-radius: 6px; padding: 13px 11px; }.observer-agent-top { display: flex; gap: 7px; align-items: center; }.observer-agent-top>strong { color: currentColor; font: 500 9px var(--observer-mono); letter-spacing: .3px; }.observer-agent-glyph { display: grid; place-items: center; width: 25px; height: 25px; flex-shrink: 0; font: 8px var(--observer-mono); border: 1px solid color-mix(in srgb,currentColor 22%,transparent); background: color-mix(in srgb,currentColor 7%,transparent); border-radius: 6px; }
 .observer-workspace .peer-aurora,.observer-workspace .peer-frame { color: #7ED3DE; }
 .observer-workspace .peer-leveret { --agent-color: #67E8F9; }.observer-workspace .peer-forge { --agent-color: #6EE7B7; }.observer-workspace .peer-atlas { --agent-color: #FCD34D; }.observer-workspace .peer-frame,.observer-workspace .peer-aurora { --agent-color: #7ED3DE; }.observer-workspace .peer-prism,.observer-workspace .peer-lens { --agent-color: #C4B5FD; }.observer-workspace .peer-sentinel { --agent-color: #FDA4AF; }.observer-workspace .peer-radar { --agent-color: #7DD3FC; }.observer-workspace .peer-quant { --agent-color: #BEF264; }
+.observer-workspace .peer-nexus{--agent-color:#A5B4FC}
+[data-theme="terracotta"] .observer-workspace .peer-nexus{--agent-color:#6553A3}
 .observer-agent { border-top-color: var(--agent-color,var(--line)); }.observer-agent-glyph,.observer-agent-top>strong,.observer-workspace .observer-assignee { color: var(--agent-color,var(--muted)); }
 [data-theme="terracotta"] .observer-workspace .peer-leveret,[data-theme="terracotta"] .observer-workspace .peer-radar { --agent-color: #315B8C; }[data-theme="terracotta"] .observer-workspace .peer-forge { --agent-color: #2B6B4D; }[data-theme="terracotta"] .observer-workspace .peer-atlas { --agent-color: #8F651D; }[data-theme="terracotta"] .observer-workspace .peer-frame,[data-theme="terracotta"] .observer-workspace .peer-aurora { --agent-color: #266E78; }[data-theme="terracotta"] .observer-workspace .peer-prism,[data-theme="terracotta"] .observer-workspace .peer-lens { --agent-color: #7F4C77; }[data-theme="terracotta"] .observer-workspace .peer-sentinel { --agent-color: #A34236; }[data-theme="terracotta"] .observer-workspace .peer-quant { --agent-color: #647434; }
 [data-theme="terracotta"] .observer-agent-top>strong,[data-theme="terracotta"] .observer-workspace .observer-assignee { color: var(--agent-color,var(--muted)); }
@@ -40,3 +42,46 @@
 @media(max-width:1200px) { .observer-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }.observer-roster { grid-template-columns: repeat(3,minmax(0,1fr)); }.observer-task-filters { width: 100%; justify-content: space-between; }.observer-metric:last-child .observer-metric-value { font-size: 17px; }.observer-severity { font-size: 7px; } }
 @media(max-width:700px) { .observer-workspace { gap: 13px; padding-right: 0; }.page-observer .page-heading { margin-bottom: 15px; }.observer-toolbar { gap: 10px; }.observer-channel>strong { font-size: 7px; }.observer-channel>small { font-size: 7px; margin-left: 0; }.observer-toolbar-actions { width: 100%; justify-content: space-between; gap: 9px; }.observer-panel-heading { padding: 15px 13px; gap: 13px; }.observer-host { width: 100%; justify-content: space-between; }.observer-host>.select-trigger { width: 210px; }.observer-heading-identity h2 { font-size: 12px; }.observer-kicker { font-size: 6px; }.observer-panel-icon { width: 32px; height: 32px; }.observer-source-state { padding: 11px 13px; font-size: 9px; flex-wrap: wrap; }.observer-source-state>span { flex: 1; }.observer-hardware-meta { padding: 11px 13px 0; font-size: 6px; gap: 7px; }.observer-hardware-meta>span:last-child { gap: 4px; }.observer-metrics { padding: 12px 13px 14px; gap: 9px; }.observer-metric { padding: 13px 10px; }.observer-metric-label { font-size: 8px; gap: 5px; flex-wrap: wrap; }.observer-metric-label>svg { width: 12px; }.observer-severity { font-size: 5px; padding: 3px; }.observer-metric-value { font-size: 23px; margin-top: 15px; }.observer-metric:last-child .observer-metric-value { font-size: 14px; }.observer-metric-detail { font-size: 7px; }.observer-load-samples { gap: 11px; }.observer-metrics.gpu { grid-template-columns: repeat(2,minmax(0,1fr)); }.observer-gpu-label { padding: 14px 13px 0; }.observer-roster { padding: 14px 13px; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }.observer-agent { padding: 12px 10px; }.observer-agent-top>strong { font-size: 9px; }.observer-agent p { font-size: 9px; }.observer-panel-foot { padding: 10px 13px; font-size: 6px; }.observer-task-filters { gap: 8px; }.observer-task-filters>.select-trigger { width: 117px; font-size: 8px; }.observer-status-filters button { padding: 6px; font-size: 8px; }.observer-table { min-width: 670px; }.observer-table td { padding: 12px; }.observer-empty { padding: 28px 18px; } }
 @media(prefers-reduced-motion:reduce) { .observer-skeleton { animation: none; }.observer-meter>span { transition: none; } }
+/* Readable telemetry labels and task context across both Warren palettes. */
+.observer-channel>strong, .observer-channel>small, .observer-poll b,
+.observer-heading-identity h2>span, .observer-hardware-meta, .observer-metric-detail,
+.observer-load-samples>span, .observer-load-samples b, .observer-gpu-label,
+.observer-agent-glyph, .observer-agent>small, .observer-panel-foot,
+.observer-table th, .observer-table td>code, .observer-table time,
+.observer-task-status, .observer-priority { font-size: var(--type-caption); }
+.observer-kicker { font-size: var(--type-micro); }
+.observer-toolbar-actions>.button, .observer-poll, .observer-host>span,
+.observer-host>.select-trigger, .observer-source-state, .observer-source-state>.button,
+.observer-error, .observer-warning, .observer-metric-label, .observer-metric-value>small,
+.observer-agent-top>strong, .observer-agent p, .observer-task-filters>.select-trigger,
+.observer-status-filters button, .observer-table, .observer-assignee,
+.observer-empty>p { font-size: var(--type-secondary); }
+.observer-severity, .observer-fleet-status { font-size: var(--type-micro); line-height: 1.5; }
+.observer-heading-identity h2 { font-size: 15px; }
+.observer-empty>strong { font-size: var(--type-body); }
+.observer-channel, .observer-toolbar-actions, .observer-hardware-meta,
+.observer-hardware-meta>span:last-child, .observer-load-samples,
+.observer-agent-top, .observer-panel-foot, .observer-panel-foot>span,
+.observer-metric-label, .observer-fleet-status { flex-wrap: wrap; }
+.observer-metric-label, .observer-fleet-status { white-space: normal; }
+.observer-agent p { min-height: 43px; }
+.observer-hardware-meta, .observer-panel-foot, .observer-heading-identity { min-width: 0; overflow-wrap: anywhere; }
+.observer-table { min-width: 800px; }
+.observer-agent-top>strong { overflow-wrap: anywhere; }
+.observer-source-state { flex-wrap: wrap; }
+.observer-status-filters { flex-wrap: wrap; }
+@media(max-width:700px) {
+  .observer-channel { row-gap: 6px; }
+  .observer-host>.select-trigger { max-width: min(210px, 65vw); }
+  .observer-hardware-meta { gap: 6px 10px; }
+  .observer-fleet-status { gap: 5px; }
+  .observer-panel-foot { align-items: flex-start; }
+}
+.observer-archive-toggle{display:flex;align-items:center;gap:7px;min-height:36px;color:var(--muted);font-size:12px;cursor:pointer}
+.observer-archive-toggle input{width:16px;height:16px;accent-color:var(--teal)}
+.observer-task-status{gap:5px}
+.observer-task-status.triage{color:#c4b5fd}.observer-task-status.ready{color:#67e8f9}.observer-task-status.scheduled{color:#9bc5f4}.observer-task-status.archived{color:var(--muted);border-style:dashed}
+[data-theme="terracotta"] .observer-task-status.triage{color:#7653a0}[data-theme="terracotta"] .observer-task-status.ready,[data-theme="terracotta"] .observer-task-status.scheduled{color:#315b8c}
+.habitat-detail-tasks .state-blocked{color:var(--danger,#f0aba4)}.habitat-detail-tasks .state-working{color:var(--menu-icon)}.habitat-detail-tasks .state-review{color:#d3ac57}.habitat-detail-tasks .state-queued{color:#7caad5}
+[data-theme="terracotta"] .habitat-detail-tasks .state-working{color:#2c6b4f}[data-theme="terracotta"] .habitat-detail-tasks .state-review{color:#94651c}[data-theme="terracotta"] .habitat-detail-tasks .state-queued{color:#315b8c}
+@media(max-width:700px){.observer-archive-toggle{min-height:40px}.observer-task-filters>.select-trigger{flex:1;min-width:110px}}

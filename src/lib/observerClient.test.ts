@@ -20,3 +20,11 @@ it('cancels both before and after start admission when abort races the native co
   admit();await Promise.resolve();await Promise.resolve();
   expect(mock.invoke.mock.calls.filter(call=>call[0]==='ssh_observer_cancel')).toHaveLength(2);
 });
+it('forwards the archive option only to task ledger requests',async()=>{
+  const tasks=readObserver('ssh-host','tasks',undefined,true);
+  expect(mock.invoke).toHaveBeenLastCalledWith('ssh_observer_start',expect.objectContaining({kind:'tasks',includeArchived:true}));
+  mock.channels[0].onmessage({type:'result',result:{kind:'tasks',data:'[]'}});await tasks;
+  const hardware=readObserver('ssh-host','hardware',undefined,true);
+  expect(mock.invoke).toHaveBeenLastCalledWith('ssh_observer_start',expect.objectContaining({kind:'hardware',includeArchived:false}));
+  mock.channels[1].onmessage({type:'result',result:{kind:'hardware',linux:null,gpu:'1, 1, 10, 30',warning:null}});await hardware;
+});

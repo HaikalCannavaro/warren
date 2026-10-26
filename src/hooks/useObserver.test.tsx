@@ -39,3 +39,24 @@ it('polls at ten seconds, skips overlapping reads and stops all work on unmount'
   act(()=>vi.advanceTimersByTime(30000));expect(mock.read).toHaveBeenCalledTimes(afterToggle);
   unmount();expect(signals.every(signal=>signal.aborted)).toBe(true);expect(vi.getTimerCount()).toBe(0);
 });
+it('polls by default at ten-second intervals and does not fetch early',async()=>{
+  vi.useFakeTimers();const {result,unmount}=renderHook(()=>useObserver('host','orchestrator'));
+  await act(async()=>{await Promise.resolve();});
+  expect(result.current.autoPoll).toBe(true);const initial=mock.read.mock.calls.length;
+  await act(async()=>{vi.advanceTimersByTime(9999);await Promise.resolve();});expect(mock.read).toHaveBeenCalledTimes(initial);
+  await act(async()=>{vi.advanceTimersByTime(1);await Promise.resolve();});expect(mock.read).toHaveBeenCalledTimes(initial+3);
+  unmount();expect(vi.getTimerCount()).toBe(0);
+});
+it('cancels a previous archive scope without refetching hardware or fleet and ignores its late result',async()=>{
+  let oldResolve!:(response:ObserverResponse)=>void;let oldSignal!:AbortSignal;
+  mock.read.mockImplementation((_id:string,kind:ObserverReadKind,signal:AbortSignal,archived:boolean)=>{
+    if(kind==='tasks'&&!archived){oldSignal=signal;return new Promise<ObserverResponse>(resolve=>{oldResolve=resolve;});}
+    return Promise.resolve(kind==='hardware'?hardware:kind==='fleet'?{kind,data:'[]'}:{kind,data:'[{"id":"old","title":"Archived","status":"archived","assignee":"nexus"}]'});
+  });
+  const {result,rerender}=renderHook(({archived})=>useObserver('host','orchestrator',archived),{initialProps:{archived:false}});
+  rerender({archived:true});await waitFor(()=>expect(result.current.tasks.data?.[0].status).toBe('archived'));
+  expect(oldSignal.aborted).toBe(true);
+  await act(async()=>{oldResolve({kind:'tasks',data:'[]'});});expect(result.current.tasks.data).toHaveLength(1);
+  expect(mock.read.mock.calls.filter(call=>call[1]==='hardware')).toHaveLength(1);
+  expect(mock.read.mock.calls.filter(call=>call[1]==='fleet')).toHaveLength(1);
+});

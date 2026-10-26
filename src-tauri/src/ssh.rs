@@ -17,8 +17,9 @@ const MAX_INPUT_BYTES: usize = 64 * 1024;
 const MAX_SESSIONS: usize = 16;
 const OBSERVER_GPU: &str = "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits";
 const OBSERVER_LINUX: &str = "export LC_ALL=C; cat /proc/loadavg && free -m && df -h / && uptime -p && printf '\\n__WARREN_CORES__\\n' && (getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || true)";
-const OBSERVER_FLEET: &str = "sqlite3 -readonly -json /root/.hermes/kanban.db \"SELECT assignee, status, title FROM tasks WHERE status IN ('running', 'blocked', 'review');\"";
-const OBSERVER_TASKS: &str = "sqlite3 -readonly -json /root/.hermes/kanban.db \"SELECT id, title, assignee, status, priority, datetime(created_at, 'unixepoch') as created_at FROM tasks ORDER BY created_at DESC LIMIT 25;\"";
+const OBSERVER_FLEET: &str = "sqlite3 -readonly -json /root/.hermes/kanban.db \"SELECT assignee, status, title FROM tasks WHERE status IN ('running', 'blocked', 'review', 'ready', 'todo', 'scheduled');\"";
+const OBSERVER_TASKS: &str = "sqlite3 -readonly -json /root/.hermes/kanban.db \"SELECT id, title, assignee, status, priority, datetime(created_at, 'unixepoch') as created_at FROM tasks WHERE status != 'archived' ORDER BY created_at DESC LIMIT 25;\"";
+const OBSERVER_TASKS_WITH_ARCHIVED: &str = "sqlite3 -readonly -json /root/.hermes/kanban.db \"SELECT id, title, assignee, status, priority, datetime(created_at, 'unixepoch') as created_at FROM tasks ORDER BY created_at DESC LIMIT 25;\"";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +67,7 @@ struct SessionControl {
     ready: Arc<AtomicBool>,
     connection: Option<Arc<SshHandle>>,
     burrow_slot: Arc<Semaphore>,
+    scheduler_slot: Arc<Semaphore>,
 }
 
 struct BurrowListener { cancel: watch::Sender<bool> }
@@ -302,7 +304,7 @@ pub async fn ssh_connect(request: SshRequest, on_event: Channel<SshEvent>, state
         let mut sessions = sessions.lock().map_err(|_| "Terminal state unavailable.".to_string())?;
         if sessions.contains_key(&session_id) { return Err("This terminal session is already connecting or open.".into()); }
         if sessions.len() >= MAX_SESSIONS { return Err("Close a terminal before opening more than 16 sessions.".into()); }
-        sessions.insert(session_id.clone(), SessionControl { tx, cancel, ready: ready.clone(), connection: None, burrow_slot: Arc::new(Semaphore::new(1)) });
+        sessions.insert(session_id.clone(), SessionControl { tx, cancel, ready: ready.clone(), connection: None, burrow_slot: Arc::new(Semaphore::new(1)), scheduler_slot: Arc::new(Semaphore::new(1)) });
     }
     let result = tokio::select! {
         biased;
@@ -464,6 +466,10 @@ async fn wait_for_read_cancel(cancel: &mut Option<watch::Receiver<bool>>) {
 }
 
 async fn read_ssh_text(connection: &SshHandle, cancel: &mut watch::Receiver<bool>, mut request_cancel: Option<watch::Receiver<bool>>, command: &str) -> Result<String, String> {
+    run_ssh_text(connection, cancel, request_cancel.take(), command, None, Duration::from_secs(20)).await
+}
+
+async fn run_ssh_text(connection: &SshHandle, cancel: &mut watch::Receiver<bool>, mut request_cancel: Option<watch::Receiver<bool>>, command: &str, input: Option<&[u8]>, operation_timeout: Duration) -> Result<String, String> {
     if *cancel.borrow() { return Err("The SSH session is offline.".into()); }
     if request_cancel.as_ref().is_some_and(|receiver| *receiver.borrow()) { return Err("SSH read cancelled.".into()); }
     // Opening an exec channel leaves the interactive PTY, its input and output intact.
@@ -479,8 +485,12 @@ async fn read_ssh_text(connection: &SshHandle, cancel: &mut watch::Receiver<bool
         biased;
         _ = cancel.changed() => Err("SSH disconnected while reading data.".into()),
         _ = wait_for_read_cancel(&mut request_cancel) => Err("SSH read cancelled.".into()),
-        result = timeout(Duration::from_secs(20), async {
+        result = timeout(operation_timeout, async {
             channel.exec(true, command.as_bytes()).await.map_err(|_| "Could not request the SSH read.".to_string())?;
+            if let Some(data) = input {
+                channel.data(data).await.map_err(|_| "Could not send the Scheduler request.".to_string())?;
+                channel.eof().await.map_err(|_| "Could not finish sending the Scheduler request.".to_string())?;
+            }
             let mut output = Vec::new();
             let mut stderr = Vec::new();
             let mut exit_status = None;
@@ -503,10 +513,31 @@ async fn read_ssh_text(connection: &SshHandle, cancel: &mut watch::Receiver<bool
                 Some(_) => Err(format!("Could not read server data. Check installed utilities, paths and SSH account permissions. {}", String::from_utf8_lossy(&stderr).trim())),
                 None => Err("SSH ended without confirming the read. Retry explicitly.".into()),
             }
-        }) => result.unwrap_or_else(|_| Err("Reading SSH data timed out.".into())),
+        }) => result.unwrap_or_else(|_| Err("The SSH operation timed out.".into())),
     };
     let _ = timeout(Duration::from_secs(2), channel.close()).await;
     result
+}
+
+#[tauri::command]
+pub async fn ssh_scheduler(session_id: String, request: serde_json::Value, state: State<'_, SshState>) -> Result<serde_json::Value, String> {
+    let mutation = request.get("action").and_then(serde_json::Value::as_str) != Some("list");
+    let (command, input) = crate::scheduler::prepare(&request)?;
+    let (connection, mut session_cancel, slot) = {
+        let sessions = state.sessions.lock().map_err(|_| "SSH state unavailable.")?;
+        let control = sessions.get(&session_id).ok_or("Connect the selected Scheduler host over SSH first.")?;
+        if !control.ready.load(Ordering::Acquire) || *control.cancel.borrow() {
+            return Err("The selected Scheduler host is offline.".into());
+        }
+        (control.connection.clone().ok_or("SSH is not ready.")?, control.cancel.subscribe(), control.scheduler_slot.clone())
+    };
+    let _permit = slot.try_acquire_owned().map_err(|_| "Wait for the current Scheduler operation to finish, then refresh.")?;
+    let output = run_ssh_text(&connection, &mut session_cancel, None, &command, Some(input.as_bytes()), Duration::from_secs(45)).await.map_err(|cause| {
+        if mutation {
+            format!("The schedule change was not confirmed. Refresh this host before making another change. {cause}")
+        } else { cause }
+    })?;
+    crate::scheduler::response(&output)
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -526,7 +557,7 @@ pub enum ObserverResult {
 pub enum ObserverEvent { Result { result: ObserverResult }, Error { message: String } }
 
 #[tauri::command]
-pub fn ssh_observer_start(session_id: String, request_id: String, kind: ObserverReadKind, on_event: Channel<ObserverEvent>, state: State<'_, SshState>) -> Result<(), String> {
+pub fn ssh_observer_start(session_id: String, request_id: String, kind: ObserverReadKind, include_archived: Option<bool>, on_event: Channel<ObserverEvent>, state: State<'_, SshState>) -> Result<(), String> {
     if request_id.is_empty() || request_id.len() > 128 { return Err("Invalid Observer request ID.".into()); }
     let (connection, mut session_cancel) = {
         let sessions = state.sessions.lock().map_err(|_| "SSH state unavailable.")?;
@@ -543,7 +574,7 @@ pub fn ssh_observer_start(session_id: String, request_id: String, kind: Observer
         reads.insert(request_id.clone(), cancel);
     }
     tauri::async_runtime::spawn(async move {
-        let result = perform_observer_read(&connection, &mut session_cancel, &read_cancel, kind).await;
+        let result = perform_observer_read(&connection, &mut session_cancel, &read_cancel, kind, include_archived.unwrap_or(false)).await;
         if let Ok(mut reads) = reads.lock() { reads.remove(&request_id); }
         if *read_cancel.borrow() { return; }
         let event = match result { Ok(result) => ObserverEvent::Result { result }, Err(message) => ObserverEvent::Error { message } };
@@ -559,7 +590,7 @@ pub fn ssh_observer_cancel(request_id: String, state: State<'_, SshState>) -> Re
     Ok(())
 }
 
-async fn perform_observer_read(connection: &SshHandle, session_cancel: &mut watch::Receiver<bool>, cancel: &watch::Receiver<bool>, kind: ObserverReadKind) -> Result<ObserverResult, String> {
+async fn perform_observer_read(connection: &SshHandle, session_cancel: &mut watch::Receiver<bool>, cancel: &watch::Receiver<bool>, kind: ObserverReadKind, include_archived: bool) -> Result<ObserverResult, String> {
     match kind {
         ObserverReadKind::Hardware => {
             let linux = read_ssh_text(connection, session_cancel, Some(cancel.clone()), OBSERVER_LINUX).await;
@@ -576,7 +607,7 @@ async fn perform_observer_read(connection: &SshHandle, session_cancel: &mut watc
             }
         }
         ObserverReadKind::Fleet => Ok(ObserverResult::Fleet { data: read_ssh_text(connection, session_cancel, Some(cancel.clone()), OBSERVER_FLEET).await? }),
-        ObserverReadKind::Tasks => Ok(ObserverResult::Tasks { data: read_ssh_text(connection, session_cancel, Some(cancel.clone()), OBSERVER_TASKS).await? }),
+        ObserverReadKind::Tasks => Ok(ObserverResult::Tasks { data: read_ssh_text(connection, session_cancel, Some(cancel.clone()), if include_archived { OBSERVER_TASKS_WITH_ARCHIVED } else { OBSERVER_TASKS }).await? }),
     }
 }
 
@@ -725,8 +756,8 @@ mod tests {
         let ready = Arc::new(AtomicBool::new(false));
         {
             let mut sessions = state.sessions.lock().unwrap();
-            sessions.insert("first".into(), SessionControl { tx: first_tx, cancel: cancel.clone(), ready: ready.clone(), connection: None, burrow_slot: Arc::new(Semaphore::new(1)) });
-            sessions.insert("second".into(), SessionControl { tx: second_tx, cancel, ready: Arc::new(AtomicBool::new(true)), connection: None, burrow_slot: Arc::new(Semaphore::new(1)) });
+            sessions.insert("first".into(), SessionControl { tx: first_tx, cancel: cancel.clone(), ready: ready.clone(), connection: None, burrow_slot: Arc::new(Semaphore::new(1)), scheduler_slot: Arc::new(Semaphore::new(1)) });
+            sessions.insert("second".into(), SessionControl { tx: second_tx, cancel, ready: Arc::new(AtomicBool::new(true)), connection: None, burrow_slot: Arc::new(Semaphore::new(1)), scheduler_slot: Arc::new(Semaphore::new(1)) });
         }
         assert!(queue_command(&state, "first", SessionCommand::Write("secret\r".into())).is_err());
         assert!(first_rx.try_recv().is_err());

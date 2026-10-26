@@ -1,4 +1,5 @@
-export const SPECIALISTS = ['Forge', 'Atlas', 'Aurora', 'Lens', 'Prism', 'Sentinel', 'Radar', 'Quant'] as const;
+import { FLEET_SPECIALISTS } from './fleet';
+export const SPECIALISTS = FLEET_SPECIALISTS;
 export type A2ASpecialist = typeof SPECIALISTS[number];
 export type A2AAgent = 'Leveret' | A2ASpecialist | 'Unknown';
 export type A2AStatus = 'completed' | 'running' | 'failed' | 'unknown';

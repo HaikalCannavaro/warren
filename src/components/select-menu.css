@@ -17,3 +17,13 @@
 @keyframes select-menu-in { from { opacity: 0; } to { opacity: 1; } }
 @media(max-width:700px) { .burrow-source-picker .select-trigger { width: 250px; }.burrow-peer-filter .select-trigger { width: 95px; font-size: 9px; }.setting-row>.select-trigger { width: 120px; font-size: 10px; }.select-option { padding: 11px; min-height: 42px; }.select-option strong { font-size: 12px; }.select-option small { font-size: 10px; } }
 @media(prefers-reduced-motion:reduce) { .select-popup { animation: none; }.select-trigger,.select-trigger>svg { transition: none; } }
+/* Keep dropdown labels and descriptions readable without changing placement. */
+.select-trigger, .select-option strong, .burrow-source-picker .select-trigger,
+.burrow-peer-filter .select-trigger, .setting-row>.select-trigger { font-size: var(--type-secondary, 13px); }
+.select-option small { font-size: var(--type-caption, 12px); line-height: 1.6; }
+.select-option { min-height: 42px; }
+.burrow-peer-filter .select-trigger { width: 126px; }
+@media(max-width:700px) {
+  .burrow-source-picker .select-trigger { width: min(250px, 100%); }
+  .setting-row>.select-trigger { width: min(180px, 100%); }
+}

@@ -1,4 +1,4 @@
-export type Section = 'terminal' | 'hermes' | 'burrow' | 'observer' | 'connections' | 'settings';
+export type Section = 'terminal' | 'burrow' | 'observer' | 'scheduler' | 'connections' | 'settings';
 export interface VpsProfile {
   id: string; name: string; host: string; port: number; username: string;
   auth: 'password' | 'key'; password: string; privateKey: string; passphrase: string;

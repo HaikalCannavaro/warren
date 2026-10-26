@@ -1,19 +1,23 @@
-export const FLEET_AGENTS = ['Leveret', 'Forge', 'Atlas', 'Frame', 'Aurora', 'Prism', 'Lens', 'Sentinel', 'Radar', 'Quant'] as const;
-export type FleetAgent = typeof FLEET_AGENTS[number];
+import { FLEET_AGENTS, type FleetAgent } from './fleet';
+export { FLEET_AGENTS };
+export type { FleetAgent };
 export type ActiveTaskStatus = 'running' | 'blocked' | 'review';
-export type KanbanStatus = 'todo' | ActiveTaskStatus | 'done' | 'unknown';
+export type FleetTaskStatus = ActiveTaskStatus | 'ready' | 'todo' | 'scheduled';
+export const KANBAN_STATES = ['triage','todo','scheduled','ready','running','blocked','review','done','archived'] as const;
+export type KanbanStatus = typeof KANBAN_STATES[number] | 'unknown';
+export const KANBAN_GLYPHS: Record<KanbanStatus,string> = {triage:'◇',todo:'□',scheduled:'⏱',ready:'▶',running:'●',blocked:'⊘',review:'◎',done:'✓',archived:'▤',unknown:'?'};
 export interface LinuxTelemetry {
   load: [number, number, number]; cores: number | null;
   ramUsed: number; ramTotal: number; diskPercent: number; diskUsed: string; diskTotal: string; uptime: string;
 }
 export interface GpuTelemetry { index: number; utilization: number | null; memoryUsed: number; memoryTotal: number; temperature: number | null; }
 export interface HardwareTelemetry { linux: LinuxTelemetry | null; gpus: GpuTelemetry[]; warning: string | null; }
-export interface FleetTask { assignee: string | null; status: ActiveTaskStatus; title: string; }
+export interface FleetTask { assignee: string | null; status: FleetTaskStatus; title: string; }
 export interface KanbanTask {
   id: string; title: string; assignee: string | null; status: KanbanStatus; rawStatus: string;
   priority: string | number | null; createdAt: number | null; rawCreatedAt: string | null;
 }
-export interface FleetState { agent: FleetAgent; state: 'working' | 'review' | 'blocked' | 'idle'; tasks: FleetTask[]; }
+export interface FleetState { agent: FleetAgent; state: 'working' | 'review' | 'blocked' | 'queued' | 'idle'; tasks: FleetTask[]; }
 export function fleetAgent(value: string | null): FleetAgent | null {
   const name = value?.trim().toLowerCase().replace(/^agent[:/_-]/, '');
   return FLEET_AGENTS.find(agent => agent.toLowerCase() === name) ?? null;
@@ -55,14 +59,14 @@ function rows(raw: string): Record<string, unknown>[] {
 function assignee(value: unknown): string | null { if (value === null || value === undefined || value === '') return null; if (typeof value !== 'string') throw new Error('A task has an invalid assignee.'); return value; }
 export function parseFleetTasks(raw: string): FleetTask[] {
   return rows(raw).map(row => {
-    if (typeof row.title !== 'string' || !['running', 'blocked', 'review'].includes(String(row.status))) throw new Error('The fleet query returned an unsupported active task.');
-    return { assignee: assignee(row.assignee), status: row.status as ActiveTaskStatus, title: row.title };
+    if (typeof row.title !== 'string' || !['running', 'blocked', 'review','ready','todo','scheduled'].includes(String(row.status))) throw new Error('The fleet query returned an unsupported task state.');
+    return { assignee: assignee(row.assignee), status: row.status as FleetTaskStatus, title: row.title };
   });
 }
 export function fleetRoster(tasks: FleetTask[]): FleetState[] {
   return FLEET_AGENTS.map(agent => {
     const assigned = tasks.filter(task => fleetAgent(task.assignee) === agent);
-    return { agent, tasks: assigned, state: assigned.some(task => task.status === 'blocked') ? 'blocked' : assigned.some(task => task.status === 'review') ? 'review' : assigned.length ? 'working' : 'idle' };
+    return { agent, tasks: assigned, state: assigned.some(task => task.status === 'blocked') ? 'blocked' : assigned.some(task => task.status === 'running') ? 'working' : assigned.some(task => task.status === 'review') ? 'review' : assigned.length ? 'queued' : 'idle' };
   });
 }
 export function parseKanbanTasks(raw: string): KanbanTask[] {
@@ -71,7 +75,7 @@ export function parseKanbanTasks(raw: string): KanbanTask[] {
     const rawCreatedAt = typeof row.created_at === 'string' ? row.created_at : null;
     const parsed = rawCreatedAt ? Date.parse(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(rawCreatedAt) ? `${rawCreatedAt.replace(' ', 'T')}Z` : rawCreatedAt) : NaN;
     return { id: String(row.id), title: row.title, assignee: assignee(row.assignee),
-      status: ['todo', 'running', 'blocked', 'review', 'done'].includes(row.status) ? row.status as KanbanStatus : 'unknown', rawStatus: row.status,
+      status: (KANBAN_STATES as readonly string[]).includes(row.status) ? row.status as KanbanStatus : 'unknown', rawStatus: row.status,
       priority: typeof row.priority === 'string' || typeof row.priority === 'number' && Number.isFinite(row.priority) ? row.priority : null,
       createdAt: Number.isFinite(parsed) ? parsed : null, rawCreatedAt };
   });

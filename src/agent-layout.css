@@ -176,3 +176,20 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+/* Keep captions and execution output readable when the activity rail is open. */
+.chat-profile-label { font-size: var(--type-caption); }
+.hermes-workspace .chat-empty>p, .execution-heading p, .execution-heading small,
+.execution-status, .execution-entry-kind, .execution-entry-text,
+.execution-entry.kind-tool .execution-entry-text, .execution-empty span,
+.execution-footnote, .settings-about .browser-environment-note { font-size: var(--type-secondary); line-height: 1.65; }
+.execution-heading h2, .execution-empty p { font-size: var(--type-body); }
+.execution-entry-meta time { font-size: var(--type-caption); }
+.hermes-workspace .markdown { font-size: var(--type-body); }
+.language-switch button, .page-hermes .heading-actions .button { font-size: var(--type-secondary); }
+.execution-status { flex-wrap: wrap; }
+@media(max-width:700px) {
+  .hermes-workspace .chat-topbar { height: auto; min-height: 58px; }
+  .chat-current-profile>strong { font-size: var(--type-body); }
+  .chat-identity-copy>strong { font-size: 15px; }
+  .hermes-workspace .chat-composer textarea { font-size: 16px; }
+}

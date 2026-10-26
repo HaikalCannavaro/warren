@@ -1,5 +1,38 @@
 # Pengujian Warren
 
+## Pixel Fleet, hierarki, dan lima status — 26 Oktober 2026
+
+- **431 tes frontend / 37 berkas lulus**, TypeScript lulus. Mencakup satu Leveret + sepuluh spesialis, Nexus/Frame di Burrow, role pengguna, prioritas blocked > running > review > queued > idle, mode arsip/cancellation, serta auto-poll default 10 detik tanpa overlap.
+- Tujuh tes geometri memastikan seluruh liang tersambung, Leveret bercabang simetris di desktop, satu poros tengah pada mobile, sudut luar utuh, dan poros melewati sela kolom. Delapan tes geometri/mount dijalankan ulang setelah perubahan mobile terakhir dan lulus. Tes mount/ResizeObserver memastikan jaringan muncul saat pertama dirender serta mengikuti perubahan ukuran. Lima pose animasi, unknown/stale, reduced motion, dialog/fokus, dan cleanup juga diperiksa.
+- **4 tes query SQLite lulus**: menjalankan query aktual dari source Rust pada database dalam memori; antrean disertakan, arsip default tersembunyi sebelum LIMIT 25, mode arsip eksplisit, dan tidak ada penulisan task.
+- Build produksi frontend lulus; chunk utama sekitar 807 kB / gzip 232 kB, drawer transkrip tetap terpisah. Peringatan chunk utama di atas 500 kB masih ada.
+- Rumput hijau, tanah coklat, dinding liang terang dan nameplate gelap diverifikasi pada Dark/Terracotta.
+- Pemeriksaan browser mobile 320 px mengonfirmasi sprite 112 px, nama 12 px/status 11 px, nol overflow dokumen dan tidak ada label yang bertabrakan dengan terowongan. Pusat sprite Leveret sama dengan pusat habitat. Fixture visual terpisah dari source produksi.
+- Query/bridge native berubah untuk status antrean dan `includeArchived`. Rust/Cargo, build Windows/APK, upgrade perangkat fisik, dan VPS sebenarnya belum divalidasi di lingkungan ini. Tes SQL lokal bukan bukti kompilasi native.
+- Panduan terkini: [PIXEL-FLEET.md](PIXEL-FLEET.md). Catatan di bawah adalah hasil tahap sebelumnya.
+
+## Habitat Observer dan Settings terpisah — 26 Oktober 2026
+
+- **413 tes frontend / 34 berkas lulus**. Tes baru mencakup 10 kelinci untuk 10 agen, banyak tugas per agen, detail mengikuti data terbaru, status unknown/stale, usia snapshot 60 detik, pause manual, visibility, reduced motion, IntersectionObserver, dan pembersihan timer.
+- Settings memakai gear di luar kedua navigasi utama; navigasi menjadi lima item. Tes memastikan akses ke Settings dan terminal tetap tersedia. Sesi SSH dengan endpoint lama dari profil yang sudah diedit tidak dipakai untuk membaca Observer.
+- TypeScript dan build produksi lulus. Main JavaScript 799,89 kB / gzip 229,23 kB; chunk transkrip terpisah 345,21 kB / gzip 105,60 kB. Peringatan chunk utama di atas 500 kB tetap ada.
+- Desain memakai SVG/CSS dengan shading 2.5D dan animasi, tanpa dependency baru. Pemeriksaan browser memakai fixture lokal yang dikecualikan dari paket produksi; tidak mengubah VPS atau tugas agen.
+- Build native, APK/perangkat fisik, dan SSH VPS nyata belum diuji pada tahap ini. Perubahan tahap ini hanya frontend dan dokumentasi; batas native pada paket Scheduler sebelumnya tetap berlaku.
+
+## Scheduler dan penghapusan Agent — 26 Oktober 2026
+
+- Baseline tepat v0.6.1 / `878bfb3c149fd05d8a0adc2c6f592c68665a85f8`.
+- **404 tes frontend / 33 berkas lulus**. Suite mencakup validasi cron, pemilihan host dan endpoint sesi yang tepat, edit berdasarkan revision, respons terlambat, kegagalan penulisan tanpa retry, modal saat pending, serta retirement sinkronisasi background setelah unlock/resume. Setelah perapian form terakhir, 15 tes komponen Scheduler dijalankan kembali dan lulus.
+- **68 tes script release**, **10 tes verifier startup APK**, dan **4 tes relay Python** lulus. Relay memakai loopback lokal dan tetap disertakan sebagai kode legacy, bukan fitur chat aktif.
+- Helper cron Python: **22 tes lulus, 3 tes lock POSIX dilewati pada Windows**. Workflow Ubuntu CI menjalankan ketiganya. Tes backend memakai crontab palsu; tidak ada mutasi crontab atau pengiriman task pada VPS pengguna.
+- TypeScript dan build produksi Vite lulus. Main JavaScript 782,78 kB / gzip 224,06 kB; drawer transkrip terpisah 345,21 kB / gzip 105,60 kB. Peringatan chunk di atas 500 kB masih ada.
+- Tampilan diperiksa pada desktop 1280×900 dan mobile 390×844, tema Dark/Terracotta, form, serta dropdown host. Mobile tidak mempunyai overflow dokumen horizontal; dropdown berada di dalam viewport. Log browser tidak menunjukkan error/warning. Pemeriksaan visual daftar berisi fixture lokal terpisah; fixture tidak disertakan dalam source/paket produksi.
+- Menu Agent, profil Agent, dan Background delivery tidak tersedia. Riwayat/profil lama tetap tersimpan dan tidak menghalangi updater sebagai aktivitas live. Worker Android lama menjadi shim tanpa pengiriman; Firebase opsional untuk release.
+- Rust/Cargo, Android SDK/NDK/Gradle, dan perangkat fisik tidak tersedia untuk validasi native pada tahap ini. Tiga tes Rust baru tersedia tetapi belum dijalankan. Build installer/APK, upgrade lama, serta SSH/cron VPS nyata masih perlu lulus sebelum release. Tes verifier di atas menguji alat pemeriksa, bukan APK baru yang sudah dibangun.
+- Habitat kelinci di Observer hanya konsep; tidak ada aset/animasi habitat yang diimplementasikan.
+
+Catatan berikut adalah hasil historis; pengujian fitur Agent/background di bawah tidak menyatakan fitur itu masih aktif pada source terbaru.
+
 ## Background delivery Android dan Firebase — 25 Oktober 2026
 
 - Baseline tepat `81350a9be1efd6745a5daf6747bb7795506252aa` / Warren v0.5.0. Perubahan belum dipush atau diterbitkan.

@@ -1,3 +1,24 @@
+# Warren v0.7.0
+
+Rilis resmi Warren v0.7.0 — Memperkenalkan **Pixel Art Fleet Habitat**, visualisasi terowongan liang bawah tanah interaktif untuk armada agen (1 Orchestrator + 10 Spesialis termasuk Nexus), 5 status kerja agen berbasis prioritas atensi dengan animasi pixel CSS, Task Ledger 9 status dengan toggle arsip, dan query telemetri Kanban yang dioptimalkan.
+
+### Ringkasan Rilis (v0.7.0):
+- **Pixel Art Fleet Habitat (Observer)**:
+  - Habitat bawah tanah interaktif dengan visual pixel art bergaya retro (grid 56×48): rumput hijau, tanah liat, dan dinding liang pasir dengan kontras tinggi pada tema Dark dan Terracotta.
+  - Struktur hierarki akurat: **Leveret** sebagai Orchestrator di puncak tengah liang, menaungi **10 Agen Spesialis** (Aurora, Frame, Lens, Forge, Prism, Sentinel, Atlas, Radar, Quant, dan Nexus).
+  - Jaringan terowongan SVG bersambung dinamis via ResizeObserver: 2 cabang simetris di layar desktop dan 1 poros tengah vertikal di layar mobile tanpa tabrakan dinding atau teks.
+- **5 Status Agen & Animasi Karakter (Prioritas Atensi)**:
+  - Status kerja komprehensif dengan hierarki perhatian: **`BLOCKED`** (Merah - minta bantuan) > **`WORKING`** (Hijau - makan wortel) > **`IN REVIEW`** (Amber - membaca laporan) > **`QUEUED`** (Biru muda - jam pasir) > **`IDLE`** (Abu-abu - tidur lelap).
+  - Status `QUEUED` membaca task berstatus `ready`, `todo`, dan `scheduled` sehingga antrean pekerjaan agen terpantau transparan sebelum dieksekusi.
+- **Task Ledger 9 Status & Toggle Arsip**:
+  - Dukungan penuh 9 status resmi Hermes: `triage`, `todo`, `scheduled`, `ready`, `running`, `blocked`, `review`, `done`, serta `archived`.
+  - Toggle **Show archived** untuk menyertakan task yang telah diarsipkan ke dalam 25 baris ledger secara aman (read-only).
+- **Backend Rust & Telemetry Performance**:
+  - Parameter `includeArchived` pada bridge native Rust Observer untuk query cepat tanpa overhead.
+  - Auto-poll 10 detik aktif secara default dengan manajemen cancellation request saat tab tersembunyi atau koneksi terputus.
+
+---
+
 # Warren v0.6.1
 
 Rilis hotfix resmi Warren v0.6.1 — Mengatasi fatal crash startup Android (WorkManager Room reflection) dan menambahkan fitur minimize-to-tray pada desktop Windows.
@@ -55,14 +76,8 @@ Rilis resmi Warren v0.5.0 — Memperkenalkan **Fleet Observer Dashboard**, **The
 Rilis resmi Warren v0.4.0 — Rollback ke arsitektur stabil v0.2.3 (Personal Workspace untuk SSH Terminal & Hermes Agent Companion dengan Biometrik Fingerprint & Layout Fixes).
 
 ### Ringkasan Rilis (v0.4.0):
-- **Arsitektur Stabil v0.2.3 Dipulihkan**:
-  - Mengembalikan workspace stabil ke antarmuka klasik Warren yang fokus pada SSH Terminal dan Hermes Agent.
-- **Biometric / Fingerprint Workspace Unlock (Android)**:
-  - Dukungan buka kunci brankas cepat menggunakan sensor sidik jari / biometrik perangkat (`androidx.biometric.BiometricPrompt`) yang diamankan dengan enkripsi AES-256-GCM berbasis hardware **Android Keystore (`AndroidKeyStore`)**.
-  - Opsi pendaftaran otomatis (*Enable fingerprint unlock on this device*) saat membuka brankas pertama kali dengan master password, tombol akses cepat **Buka dengan sidik jari** di layar masuk, serta pengaturan manajemen biometrik di menu **Settings**.
-- **Android System Bar & Cutout Safe-Area Fix**:
-  - Integrasi `WindowInsetsCompat` (`systemBars()`, `displayCutout()`, dan `ime()`) langsung pada root view native Android serta fallback CSS `env(safe-area-inset-top)` / `env(safe-area-inset-bottom)` agar bagian atas aplikasi (`.topbar` & `.vault-screen`) tidak lagi tertimpa oleh status bar sistem.
-- **Mobile SSH Terminal Viewport & Clipping Fix**:
-  - Perbaikan kalkulasi dimensi `FitAddon` dengan memisahkan padding ke wrapper `.xterm-shell` dan mengenolkan padding `.xterm-container`, ditambah pemangkasan batas baris/kolom (*row/col clamping*) dan listener `window.visualViewport` saat keyboard virtual muncul agar baris prompt paling bawah dan sisi kanan terminal tidak lagi terpotong.
-  - Tata letak halaman terminal mobile yang lebih ringkas dan responsif untuk memaksimalkan ruang vertikal sesi SSH.
-- **Extended Slash Commands Suite**: Tetap menyertakan seluruh 13 perintah slash HTTP & lokal (`/lastcmd`, `/term`, `/clear`, `/retry`, `/fork`, `/export`, `/models`, `/model`, `/skills`, `/tools`, `/status`, `/stop`, `/help`).
+- **Arsitektur Stabil v0.2.3 Dipulihkan**: Workspace stabil fokus pada SSH Terminal dan Hermes Agent.
+- **Biometric / Fingerprint Unlock (Android)**: Buka kunci brankas cepat dengan sensor sidik jari perangkat berbasis Android Keystore.
+- **Android System Bar & Cutout Safe-Area Fix**: Integrasi `WindowInsetsCompat` pada root view native Android dan safe-area CSS.
+- **Mobile SSH Terminal Viewport & Clipping Fix**: Perbaikan kalkulasi dimensi FitAddon dan visualViewport keyboard virtual.
+- **Extended Slash Commands Suite**: 13 perintah slash HTTP & lokal (`/lastcmd`, `/term`, `/clear`, `/retry`, `/fork`, `/export`, `/models`, `/model`, `/skills`, `/tools`, `/status`, `/stop`, `/help`).

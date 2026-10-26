@@ -19,3 +19,69 @@
 @media(max-height:560px) and (max-width:700px){.preview-banner{display:none}.page-heading{display:none}.page-content{padding:10px 12px}.workspace-footnote{display:none}.terminal-workspace{min-height:0}.terminal-empty{justify-content:flex-start}.terminal-illustration{display:none}.terminal-empty>.eyebrow{margin-top:8px}.empty-features{display:none}.bottom-nav{min-height:51px;padding-top:4px;padding-bottom:4px}.bottom-nav>button{gap:3px;padding:4px}.bottom-nav>button>svg{width:17px;height:17px}.topbar{height:calc(45px + env(safe-area-inset-top,0px));min-height:calc(45px + env(safe-area-inset-top,0px))}.chat-topbar{min-height:48px}.chat-messages{padding:13px}.composer-area{padding:5px 10px 7px}.composer-caption{display:none}.conversation-sidebar{top:48px}}
 @media(max-height:520px) and (max-width:700px){.page-terminal .page-heading,.terminal-statusbar{display:none}.page-content.page-terminal{padding:4px 6px}.terminal-tabs{height:34px;min-height:34px}.session-info{padding:5px 10px}.xterm-shell{padding:4px 3px 4px 6px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+/* Shared readable type sizes; terminal rendering still follows its own setting. */
+:root { --type-body: 14px; --type-secondary: 13px; --type-caption: 12px; --type-micro: 11px; }
+.page-heading p, .terminal-empty>p, .quick-empty>span, .setup-step p,
+.hermes-teaser p, .terminal-empty .small-note, .add-profile-card>p,
+.connections-note, .test-result, .conversation-empty>p, .chat-empty>p,
+.chat-empty-foot p, .message-error, .waiting-text, .settings-card-title p,
+.setting-row label>span, .setting-row>div:first-child>span, .settings-explainer,
+.settings-about>p, .dialog-heading p, .field-hint, .form-note,
+.inline-error, .inline-warning, .help-content p, .vault-intro>p, .vault-card>p,
+.vault-biometric-hint, .vault-warning p, .update-status p, .update-release-notes {
+  font-size: var(--type-secondary); line-height: 1.7; overflow-wrap: anywhere;
+}
+.page-heading p { max-width: 48ch; }
+.nav-item { font-size: var(--type-body); }
+.button, .button.compact, .page-heading .button, .heading-actions .button,
+.page-terminal .heading-actions .button, .sidebar-help, .add-dashed, .text-link,
+.manage-connections, .new-conversation, .settings-card-footer .button,
+.dialog-actions .button, .host-verification .dialog-actions .button,
+.profile-form .file-import, .update-actions .button { font-size: var(--type-secondary); }
+.sidebar-workspace strong, .local-security strong, .panel-heading h2,
+.quick-empty>p, .setup-step strong, .quick-connection strong, .hermes-teaser strong,
+.conversation-item strong, .message-byline strong, .setting-row strong,
+.update-status strong, .update-release-heading>strong { font-size: var(--type-secondary); }
+.sidebar-workspace div>span, .local-security p, .desktop-breadcrumb,
+.local-pill, .preview-banner, .empty-tab, .session-tab>button[role=tab],
+.terminal-tabs-meta, .terminal-statusbar, .workspace-footnote, .empty-features,
+.quick-connection small, .session-info, .profile-address, .profile-status,
+.connection-section-heading>span, .conversation-empty>span, .conversation-bottom,
+.conversation-item small, .chat-identity small, .message-byline time, .stream-label,
+.code-header, .code-header button, .blocked-image, .composer-caption, .tool-activity,
+.profile-pick small, .setting-row select, .font-control output, .settings-about dl>div,
+.optional, .paste-review .field-label, .field-label, .vault-features, .vault-divider,
+.update-progress>span, .update-release-heading>time, .update-release .field-label,
+.update-trust, .profile-tags>span, .subtle-tag { font-size: var(--type-caption); }
+.nav-caption, .eyebrow, .page-heading .eyebrow, .terminal-empty>.eyebrow,
+.getting-started>.eyebrow, .chat-empty>.eyebrow, .vault-intro>.eyebrow,
+.conversation-list-title, .sidebar-footer, .sidebar-footer small,
+.vault-version, .count-badge, .nav-count { font-size: var(--type-micro); }
+.markdown, .profile-pick strong { font-size: var(--type-body); }
+.markdown pre code, .markdown table, .paste-preview, .profile-form .key-input { font-size: var(--type-secondary); }
+.settings-card-title h2 { font-size: 16px; }
+.connection-section-heading h2, .add-profile-card>strong { font-size: 15px; }
+.profile-form label, .vault-card label, .auth-field legend, .segmented>button,
+.vault-card label.vault-biometric-optin { font-size: var(--type-secondary); }
+.profile-form input, .profile-form textarea, .vault-card input { font-size: var(--type-body); }
+.terminal-keybar>button { font-size: var(--type-caption); min-height: 34px; height: auto; }
+.terminal-tabs-meta { letter-spacing: .6px; }
+.terminal-statusbar, .session-info { flex-wrap: wrap; height: auto; gap: 6px 12px; }
+.terminal-statusbar { min-height: 34px; padding-top: 6px; padding-bottom: 6px; }
+.settings-card-title>div, .setting-row>label, .setting-row>div:first-child,
+.dialog-heading>div, .update-status>div, .setup-step>div { min-width: 0; }
+.dialog-actions { flex-wrap: wrap; }
+@media(max-width:700px) {
+  .page-heading { flex-wrap: wrap; }
+  .page-heading p { max-width: 40ch; }
+  .setting-row { flex-wrap: wrap; align-items: flex-start; }
+  .setting-row>label, .setting-row>div:first-child { flex: 1 1 180px; }
+  .setting-row label>span { max-width: none; }
+  .setting-row>.select-trigger, .font-control, .language-switch { max-width: 100%; }
+  .profile-form input, .profile-form textarea, .vault-card input { font-size: 16px; }
+  .profile-form .key-input { font-size: var(--type-secondary); }
+  .bottom-nav { justify-content: flex-start; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; min-height: 68px; gap: 3px; }
+  .bottom-nav>button { flex: 0 0 76px; min-width: 76px; min-height: 52px; font-size: var(--type-caption); scroll-snap-align: center; }
+  .bottom-nav>button.active::before { top: 0; }
+  .bottom-nav>button>span { font-size: var(--type-caption); line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
+}

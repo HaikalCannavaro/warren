@@ -70,42 +70,56 @@ it('switches the interface language in Settings without replacing terminal state
   expect(mock.lock).not.toHaveBeenCalled();
 });
 
-it('retains the Agent composer and terminal through navigation links, both menus, and a language change', () => {
+it('keeps legacy Agent data private and out of navigation while retaining the terminal through remaining menus', () => {
   setLanguage('en');
+  const legacy = { id: 'legacy-agent', name: 'Private old Agent', url: 'https://agent.example/v1', model: 'model', token: 'private-agent-token' };
+  const state = { version: 1, deviceId: 'test', vps: [{ id: 'server', name: 'My VPS', host: 'server.example', port: 22, username: 'ops', auth: 'password', password: '', privateKey: '', passphrase: '' }], hermes: [legacy],
+    conversations: [{ id: 'old-chat', profileId: legacy.id, title: 'Private old chat', draft: 'Retained draft', messages: [], createdAt: 1 }], settings: { fontSize: 14, scrollback: 5000 } };
+  const before = JSON.stringify(state);
   const openConversation = vi.fn();
-  mock.workspace.mockReturnValue({
-    ready: true, preview: true, busy: false, error: null, saveError: null,
-    state: { version: 1, deviceId: 'test', vps: [], hermes: [{ id: 'agent', name: 'Leveret', url: 'https://example.com/v1', model: 'hermes', token: 'test' }],
-      conversations: [{ id: 'chat', profileId: 'agent', title: 'Current chat', draft: 'Keep this draft', messages: [], createdAt: 1 }],
-      settings: { fontSize: 14, scrollback: 5000 } },
-    sessions: [], activeConversationId: 'chat', streamingIds: new Set(), toolActivity: {}, hostPrompt: null,
-    closeSession: mock.disconnect, lock: mock.lock, openConversation, setDraft: vi.fn(),
-  });
+  mock.workspace.mockReturnValue({ ready: true, preview: true, busy: false, error: null, saveError: null, state,
+    sessions: [], streamingIds: new Set(['old-chat']), commandBusyIds: new Set(['old-chat']), commandsLoadingIds: new Set(['old-chat']), toolActivity: {}, hostPrompt: null,
+    notificationTarget: { conversationId: 'old-chat', receivedAt: 1 }, closeSession: mock.disconnect, lock: mock.lock, openConversation });
   render(<App/>);
-  fireEvent.click(screen.getAllByRole('button', { name: 'Terminal' })[0]);
-  const terminal = screen.getByLabelText('Terminal test buffer');
-  const page = screen.getByRole('main');
-  fireEvent.change(terminal, { target: { value: 'Retained server output' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Open Agent' }));
-  const composer = screen.getByRole('textbox', { name: 'Message Agent' }) as HTMLTextAreaElement;
-  composer.setSelectionRange(4, 9);
-  fireEvent.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: /^Connections/ }));
-  expect(composer.isConnected).toBe(true);
-  expect(composer.closest('[inert]')).not.toBeNull();
-  expect(screen.queryByRole('textbox', { name: 'Message Agent' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
-  expect(openConversation).toHaveBeenCalledWith('agent');
-  expect(screen.getByRole('textbox', { name: 'Message Agent' })).toBe(composer);
-  fireEvent.click(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('button', { name: 'Settings' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Bahasa Indonesia' }));
-  fireEvent.click(within(screen.getByRole('navigation', { name: 'Navigasi utama' })).getByRole('button', { name: 'Agent' }));
-  expect(screen.getByRole('textbox', { name: 'Pesan untuk Agent' })).toBe(composer);
-  expect(composer.value).toBe('Keep this draft');
-  expect([composer.selectionStart, composer.selectionEnd]).toEqual([4, 9]);
-  fireEvent.click(within(screen.getByRole('navigation', { name: 'Navigasi seluler' })).getByRole('button', { name: 'Terminal' }));
-  expect(screen.getByLabelText('Terminal test buffer')).toBe(terminal);
-  expect((terminal as HTMLTextAreaElement).value).toBe('Retained server output');
-  expect(screen.getByRole('main')).toBe(page);
-  expect(mock.disconnect).not.toHaveBeenCalled();
-  expect(mock.lock).not.toHaveBeenCalled();
+  expect(screen.getByRole('heading', {name:/^Observer\s*\.$/})).toBeTruthy();
+  for (const name of ['Main navigation', 'Mobile navigation']) {
+    const nav = screen.getByRole('navigation',{name});
+    expect(within(nav).queryByRole('button',{name:'Agent'})).toBeNull();
+    expect(within(nav).getByRole('button',{name:'Scheduler'})).toBeTruthy();
+    expect(within(nav).getAllByRole('button')).toHaveLength(5);
+    expect(within(nav).queryByRole('button',{name:'Settings'})).toBeNull();
+  }
+  fireEvent.click(within(screen.getByRole('navigation',{name:'Main navigation'})).getByRole('button',{name:'Terminal'}));
+  const terminal=screen.getByLabelText('Terminal test buffer');fireEvent.change(terminal,{target:{value:'Retained server output'}});
+  expect(screen.queryByRole('button',{name:'Open Agent'})).toBeNull();
+  fireEvent.click(within(screen.getByRole('navigation',{name:'Main navigation'})).getByRole('button',{name:/^Connections/}));
+  expect(screen.getByRole('heading',{name:'VPS & SSH'})).toBeTruthy();
+  expect(screen.queryByText(legacy.name)).toBeNull();expect(screen.queryByText('private-agent-token')).toBeNull();
+  expect(screen.queryByRole('button',{name:'Open chat'})).toBeNull();expect(screen.queryByRole('button',{name:'Connect Agent'})).toBeNull();
+  fireEvent.click(screen.getAllByRole('button',{name:'Settings'})[0]);
+  fireEvent.click(screen.getByRole('button',{name:'Bahasa Indonesia'}));
+  fireEvent.click(within(screen.getByRole('navigation',{name:'Navigasi seluler'})).getByRole('button',{name:'Terminal'}));
+  expect(screen.getByLabelText('Terminal test buffer')).toBe(terminal);expect((terminal as HTMLTextAreaElement).value).toBe('Retained server output');
+  expect(openConversation).not.toHaveBeenCalled();expect(JSON.stringify(state)).toBe(before);
+  expect(mock.disconnect).not.toHaveBeenCalled();expect(mock.lock).not.toHaveBeenCalled();
+});
+
+it('keeps gear Settings controls outside both main menus and marks them active', () => {
+  setLanguage('en');
+  mock.workspace.mockReturnValue({ready:true,preview:true,busy:false,error:null,saveError:null,
+    state:{version:1,deviceId:'test',vps:[],hermes:[],conversations:[],settings:{fontSize:14,scrollback:5000}},
+    sessions:[],streamingIds:new Set(),toolActivity:{},hostPrompt:null});
+  render(<App/>);
+  const settings = screen.getAllByRole('button',{name:'Settings'});
+  expect(settings).toHaveLength(2);
+  for (const control of settings) {
+    expect(control.closest('nav')).toBeNull();
+    expect(control.querySelector('.lucide-settings')).toBeTruthy();
+  }
+  fireEvent.click(settings[1]);
+  expect(screen.getByRole('heading',{name:/^Settings\s*\.$/})).toBeTruthy();
+  expect(settings.every(control=>control.getAttribute('aria-current')==='page')).toBe(true);
+  for (const name of ['Main navigation','Mobile navigation']) {
+    expect(within(screen.getByRole('navigation',{name})).queryByRole('button',{current:'page'})).toBeNull();
+  }
 });

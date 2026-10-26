@@ -43,6 +43,9 @@
 .burrow-log-open:hover .burrow-open-chevron { color: #e2e8f0; transform: translateX(2px); }
 .burrow-agent-badge { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; overflow-wrap: anywhere; padding: 4px 7px; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 4px; background: color-mix(in srgb, currentColor 7%, transparent); font: 600 9px/1.3 'JetBrains Mono', 'Cascadia Code', Consolas, monospace; letter-spacing: .5px; }
 .peer-leveret { color: #67e8f9; }.peer-forge { color: #6ee7b7; }.peer-atlas { color: #fcd34d; }.peer-sentinel { color: #fda4af; }.peer-lens,.peer-aurora,.peer-prism { color: #c4b5fd; }.peer-radar { color: #7dd3fc; }.peer-quant { color: #bef264; }.peer-unknown { color: #94a3b8; }
+.peer-frame{color:#7ed3de}.peer-nexus{color:#a5b4fc}
+[data-theme="terracotta"] .peer-frame{color:#266e78}
+[data-theme="terracotta"] .peer-nexus{color:#6553a3}
 .burrow-status { font: 8px/1.4 'JetBrains Mono', 'Cascadia Code', Consolas, monospace; color: #64748b; padding: 3px 6px; border-radius: 3px; margin-left: 3px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .burrow-status.completed { color: #6ee7b7; background: #064e3b33; }.burrow-status.running { color: #fcd34d; background: #713f122b; }.burrow-status.failed { color: #fda4af; background: #88133733; }
 .burrow-open-chevron { margin-left: auto; transition: transform .15s; }
@@ -106,3 +109,34 @@
   .bottom-nav>button { flex: 1; min-width: 0; }.bottom-nav>button>span { font-size: 8px; }
 }
 @media(prefers-reduced-motion: reduce) { .burrow-log-item,.burrow-detail,.burrow-monitor-pill>span,.burrow-spin { animation: none !important; }.burrow-open-chevron { transition: none; } }
+/* Feed context is reading content, including on a narrow phone viewport. */
+.burrow-console-title p, .burrow-peer-filter, .burrow-peer-filter select,
+.burrow-source-picker select, .burrow-control, .burrow-log-meta button,
+.burrow-empty p, .burrow-connection-state p, .burrow-detail-footer,
+.burrow-error, .burrow-warning, .burrow-copy-feedback { font-size: var(--type-secondary); }
+.burrow-overline, .burrow-summary-caption, .page-burrow .page-heading .eyebrow { font-size: var(--type-micro); }
+.burrow-monitor-pill, .burrow-source-label, .burrow-control small,
+.burrow-stream-heading, .burrow-stream-heading>span:last-child, .burrow-log-gutter time,
+.burrow-event-direction, .burrow-agent-badge, .burrow-status, .burrow-log-meta>code,
+.burrow-console-footer, .burrow-detail-heading p, .burrow-detail-tools>code,
+.burrow-detail-tools .icon-button, .burrow-turn-byline time, .burrow-inline-status,
+.burrow-message-tags>span { font-size: var(--type-caption); }
+.burrow-summary p, .burrow-markdown { font-size: var(--type-body); line-height: 1.75; }
+.burrow-markdown code, .burrow-markdown table, .burrow-markdown th,
+.burrow-markdown td, .burrow-section-label { font-size: var(--type-secondary); }
+.burrow-markdown h1, .burrow-markdown h2 { font-size: 17px; }
+.burrow-markdown h3 { font-size: 15px; }
+.burrow-actions, .burrow-stream-heading, .burrow-console-footer,
+.burrow-detail-heading p, .burrow-detail-tools>div { flex-wrap: wrap; }
+.burrow-log-gutter { width: 78px; }
+.burrow-status { white-space: normal; overflow-wrap: anywhere; }
+.burrow-console-footer>span { min-width: 0; overflow-wrap: anywhere; }
+@media(max-width:700px) {
+  .burrow-log-gutter { width: 70px; }
+  .burrow-log-item { gap: 10px; }
+  .burrow-stream-heading { gap: 7px; }
+  .burrow-console-footer>span:nth-child(2) { max-width: none; text-align: left; }
+  .burrow-monitor-pill { max-width: calc(100% - 45px); }
+  .burrow-detail-tools>div { width: 100%; }
+  .burrow-detail-tools .icon-button { min-height: 36px; }
+}

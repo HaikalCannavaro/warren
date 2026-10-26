@@ -1,0 +1,19 @@
+/** Product roster and role labels, based on the user's fleet hierarchy. */
+export const ORCHESTRATOR = 'Leveret' as const;
+export const FLEET_SPECIALISTS = ['Aurora','Frame','Lens','Forge','Prism','Sentinel','Atlas','Radar','Quant','Nexus'] as const;
+export const FLEET_AGENTS = [ORCHESTRATOR,...FLEET_SPECIALISTS] as const;
+export type FleetAgent = typeof FLEET_AGENTS[number];
+
+export const FLEET_ROLES: Record<FleetAgent, {label:[string,string];title:[string,string];scope:[string,string]}> = {
+  Leveret:{label:['Orchestrator','Orkestrator'],title:['Chief of Staff & Quality Governor','Kepala Staf & Pengawas Mutu'],scope:['Task decomposition, dependency planning, fleet routing, evidence governance, and final synthesis.','Dekomposisi tugas, perencanaan dependensi, routing armada, tata kelola bukti, dan sintesis akhir.']},
+  Aurora:{label:['Product & UX Design','Desain Produk & UX'],title:['Product & UX Design Direction','Arahan Desain Produk & UX'],scope:['Visual research, design language, tokens, typography, and spatial layout.','Riset visual, bahasa desain, token, tipografi, dan tata letak.']},
+  Frame:{label:['Frontend','Frontend'],title:['Frontend Implementation','Implementasi Frontend'],scope:['Browser implementation, DOM state, and responsive interfaces following the design contract.','Implementasi browser, state DOM, dan antarmuka responsif sesuai kontrak desain.']},
+  Lens:{label:['Visual QA','QA Visual'],title:['Independent Rendered Visual QA','QA Visual Hasil Render Independen'],scope:['Rendered visual audits, viewport inspection, geometry, overflow, and visual regression.','Audit visual hasil render, inspeksi viewport, geometri, overflow, dan regresi visual.']},
+  Forge:{label:['Backend & Systems','Backend & Sistem'],title:['Backend & Systems Engineering','Rekayasa Backend & Sistem'],scope:['Server logic, APIs, databases, queues, bot automation, and CLI tooling.','Logika server, API, database, antrean, otomasi bot, dan perkakas CLI.']},
+  Prism:{label:['Functional QA','QA Fungsional'],title:['Functional QA & Algorithmic Correctness','QA Fungsional & Kebenaran Algoritma'],scope:['Functional tests, integration, benchmarks, algorithm verification, and data regression.','Tes fungsional, integrasi, benchmark, verifikasi algoritma, dan regresi data.']},
+  Sentinel:{label:['Security','Keamanan'],title:['Security, Threat & Hardening','Keamanan, Ancaman & Hardening'],scope:['Threat modeling, vulnerability audits, credential exposure checks, and security verification.','Pemodelan ancaman, audit kerentanan, pemeriksaan kebocoran kredensial, dan verifikasi keamanan.']},
+  Atlas:{label:['Infrastructure & SRE','Infrastruktur & SRE'],title:['Infrastructure, SRE & Operations','Infrastruktur, SRE & Operasional'],scope:['Runtime reliability, deployments, Linux, networking, systemd, monitoring, and CI/CD.','Keandalan runtime, deployment, Linux, jaringan, systemd, pemantauan, dan CI/CD.']},
+  Radar:{label:['Technical Research','Riset Teknis'],title:['Technical Research & Intelligence','Riset & Intelijen Teknis'],scope:['Upstream repositories, libraries, papers, primary sources, and verified technical research.','Repo upstream, pustaka, paper, sumber primer, dan riset teknis terverifikasi.']},
+  Quant:{label:['Quantitative Research','Riset Kuantitatif'],title:['Quantitative Research & Market Analysis','Riset Kuantitatif & Analisis Pasar'],scope:['Time-series analysis, statistical modeling, backtesting, probability, and market research.','Analisis deret waktu, pemodelan statistik, backtesting, probabilitas, dan riset pasar.']},
+  Nexus:{label:['Operations & Docs','Operasional & Dokumen'],title:['Operations, Documentation & Coordination','Operasional, Dokumentasi & Koordinasi'],scope:['Technical documentation, SOPs, runbooks, release changelogs, and operational coordination.','Dokumentasi teknis, SOP, runbook, changelog rilis, dan koordinasi operasional.']},
+};

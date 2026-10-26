@@ -56,6 +56,10 @@ jobs:
           "$RUNNER_TEMP/warren-relay-tests/bin/python" -m unittest discover -s server/background-relay -p test_relay.py -v
       - name: Test Android release startup verifier
         run: python -m unittest discover -s scripts -p test_android_startup.py -v
+      - name: Test remote Scheduler crontab operations and Linux locking
+        run: python -m unittest discover -s scripts -p test_scheduler_remote.py -v
+      - name: Test Observer fleet and archived ledger queries
+        run: python -m unittest discover -s scripts -p test_observer_queries.py -v
 
   windows:
     name: Build Windows installer
@@ -146,10 +150,10 @@ jobs:
         run: |
           npm run tauri -- android init --ci --skip-targets-install
           npm run icons:generate
-      - name: Configure Android Firebase
+      - name: Configure optional legacy Firebase registration
         env:
           FIREBASE_GOOGLE_SERVICES_BASE64: ${{ secrets.FIREBASE_GOOGLE_SERVICES_BASE64 }}
-        run: node scripts/configure-android-firebase.mjs --required
+        run: node scripts/configure-android-firebase.mjs
       - name: Build universal release APK
         run: npm run android:release -- --ci
       - name: Sign and verify APK

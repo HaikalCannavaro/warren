@@ -9,7 +9,7 @@ import { fetchHermesModels, fetchHermesSkills, fetchHermesToolsets, postHermesSt
 import { GatewayClient } from '../lib/gatewayClient';
 import * as native from '../lib/native';
 import { WorkspaceVault } from '../lib/vault';
-import { backgroundCommand, backgroundStatus, isAndroidNative, mergeBackgroundJobs, type BackgroundJob } from '../lib/backgroundChat';
+import { backgroundCommand, backgroundStatus, isAndroidNative } from '../lib/backgroundChat';
 
 type HostPrompt={profileId:string;fingerprint:string;host:string};
 type TerminalBuffer={chunks:Uint8Array[];size:number;listener?:((bytes:Uint8Array)=>void)};
@@ -35,7 +35,8 @@ export function useWorkspace() {
   const [activeSessionId,setActiveSessionId]=useState<string|null>(null);
   const [hostPrompt,setHostPrompt]=useState<HostPrompt|null>(null);
   const [activeConversationId,setActiveConversationId]=useState<string|null>(null);
-  const [notificationTarget,setNotificationTarget]=useState<{conversationId:string;receivedAt:number}|null>(null);
+  // Kept in the hook shape for vault compatibility; Agent navigation is retired.
+  const notificationTarget = null;
   const [streamingIds,setStreamingIds]=useState<Set<string>>(new Set());
   const activeRequests=useRef(new Set<string>());
   const detachedRequests=useRef(new Set<string>());
@@ -85,45 +86,6 @@ export function useWorkspace() {
     saveTimer.current=setTimeout(()=>{void persist().catch(()=>{});},350);
     return next;
   },[persist,canInteract]);
-
-  useEffect(()=>{
-    if (!ready || preview || !isAndroidNative()) return;
-    let disposed = false; let reading = false;
-    const sync = async () => {
-      if (reading || transition.current || !vault.current || document.visibilityState === 'hidden') return;
-      reading = true; const version = transitionVersion.current;
-      try {
-        const result = await backgroundCommand<{jobs: BackgroundJob[];openConversationId?:string}>('results', {deviceId: stateRef.current.deviceId});
-        if (disposed || version !== transitionVersion.current || transition.current) return;
-        const merged = mergeBackgroundJobs(stateRef.current, result.jobs);
-        if (result.openConversationId && merged.state.conversations.some(c=>c.id===result.openConversationId)) {
-          merged.state.activeConversationId=result.openConversationId;setActiveConversationId(result.openConversationId);
-          setNotificationTarget({conversationId:result.openConversationId,receivedAt:Date.now()});
-        }
-        if (JSON.stringify(merged.state) !== JSON.stringify(stateRef.current)) {
-          stateRef.current = merged.state; setState(merged.state); await persist();
-        }
-        // Acknowledge only after Stronghold has durably saved the final response.
-        if (merged.acknowledge.length && !disposed && version === transitionVersion.current) {
-          await persist(); await backgroundCommand('ack', {ids: merged.acknowledge});
-        }
-        // Recover a crash between saving the intent in the vault and native enqueue.
-        const status = await backgroundStatus();
-        if (disposed || version !== transitionVersion.current || transition.current) return;
-        for (const conversation of stateRef.current.conversations) for (const message of conversation.messages) {
-          if (status.enabled && status.profileId === conversation.profileId && message.backgroundRequest && !result.jobs.some(job => job.submissionId === message.requestId)) {
-            await backgroundCommand('enqueue', {profileId: conversation.profileId, request: message.backgroundRequest});
-          }
-        }
-      } catch (cause) {
-        if (!disposed && version === transitionVersion.current) setError(errorText(cause));
-      } finally { reading = false; }
-    };
-    const resume = () => { if (document.visibilityState !== 'hidden') { void backgroundCommand('sync').catch(()=>{}); void sync(); } };
-    resume(); const timer = setInterval(()=>{void sync();},5000);
-    document.addEventListener('visibilitychange',resume);
-    return () => { disposed=true; clearInterval(timer); document.removeEventListener('visibilitychange',resume); };
-  },[ready,preview,persist]);
 
   const closeDesktop=useCallback(async()=>{
     if(transition.current)return;
@@ -736,7 +698,7 @@ export function useWorkspace() {
     activeConversationId,setActiveConversationId:selectConversation,createConversation,openConversation,deleteConversation,
     renameConversation:(id:string,title:string)=>{if(title.trim())updateConversation(id,c=>({...c,title:title.trim().slice(0,80)}));},
     setDraft:(id:string,text:string)=>updateConversation(id,c=>({...c,draft:text})),
-    sendMessage,streamingIds:new Set([...streamingIds,...state.conversations.filter(c=>c.messages.some(m=>m.background&&m.status==='streaming')).map(c=>c.id)]),toolActivity,runCommand,loadCommands,commandBusyIds,commandCatalog,commandsLoadingIds,
+    sendMessage,streamingIds,toolActivity,runCommand,loadCommands,commandBusyIds,commandCatalog,commandsLoadingIds,
     testHermes:async(profileId:string)=>{
       if(!canInteract())throw new Error(translate("Wait for saving or locking to finish.", "Tunggu proses penyimpanan atau penguncian selesai."));
       const p=stateRef.current.hermes.find(p=>p.id===profileId);if(!p)throw new Error(translate("Connection not found.", "Profil tidak ditemukan."));

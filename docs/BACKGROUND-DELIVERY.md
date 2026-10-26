@@ -1,4 +1,6 @@
-# Pengiriman background Warren dan Firebase
+# Pengiriman background Warren dan Firebase — arsip
+
+> **Arsip fitur yang telah dihentikan.** Pada perubahan setelah v0.6.1, Agent Chat dan Background delivery dihapus dari Warren. Instruksi aktivasi di bawah hanya mendokumentasikan versi lama; panel Settings tersebut tidak lagi tersedia. Tidak ada konfigurasi Firebase atau relay baru yang diperlukan untuk fitur aktif. Data lama tidak dihapus dan layanan VPS tidak dihentikan oleh upgrade ini. Lihat [catatan perubahan](SCHEDULER-AND-WORKSPACE-UPDATE.md).
 
 Baseline: Warren v0.5.0, commit `81350a9be1efd6745a5daf6747bb7795506252aa`.
 Target perangkat: Samsung Galaxy A73 5G SM-A736B, One UI 8 / Android 16 API 36.

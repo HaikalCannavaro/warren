@@ -4,6 +4,7 @@ mod hermes;
 mod gateway;
 mod ssh;
 mod updater;
+mod scheduler;
 #[cfg(desktop)]
 mod desktop;
 #[cfg(target_os = "android")]
@@ -63,6 +64,7 @@ pub fn run() {
             ssh::ssh_burrow_stop,
             ssh::ssh_observer_start,
             ssh::ssh_observer_cancel,
+            ssh::ssh_scheduler,
             hermes::probe_hermes,
             hermes::hermes_http,
             hermes::chat_stream,

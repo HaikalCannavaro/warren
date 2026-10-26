@@ -75,26 +75,18 @@ class AndroidUpdaterPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun backgroundChat(invoke: Invoke) {
         val args = invoke.parseArgs(BackgroundChatArgs::class.java)
-        if (args.action == "permission" && Build.VERSION.SDK_INT >= 33) {
-            requestPermissionForAlias("notifications", invoke, "backgroundPermissionResult")
-            return
-        }
-        worker.execute {
-            try { invoke.resolve(JSObject(BackgroundChat.command(activity, args.action, org.json.JSONObject(args.payload)).toString())) }
-            catch (_: Exception) { invoke.reject("Background operation failed. Check the relay address, token, connection, and saved outbox.") }
-        }
+        if (args.action == "status") invoke.resolve(JSObject(BackgroundChat.status().toString()))
+        else invoke.reject("Agent chat and background delivery have been retired from Warren.")
     }
 
     @PermissionCallback
     private fun backgroundPermissionResult(invoke: Invoke) {
-        try { invoke.resolve(JSObject(BackgroundChat.command(activity, "permission", org.json.JSONObject()).toString())) }
-        catch (_: Exception) { invoke.reject("Could not initialize result notifications.") }
+        invoke.resolve(JSObject(BackgroundChat.status().toString()))
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         activity.intent = intent
-        try { BackgroundChat.schedule(activity) } catch (_: Exception) { }
     }
     private val worker = Executors.newSingleThreadExecutor { task ->
         Thread(task, "harbor-update-verifier").apply { isDaemon = true }
@@ -107,8 +99,7 @@ class AndroidUpdaterPlugin(private val activity: Activity) : Plugin(activity) {
 
     override fun load(webView: WebView) {
         super.load(webView)
-        BackgroundChat.activity = java.lang.ref.WeakReference(activity)
-        BackgroundChat.ensureChannel(activity)
+        BackgroundChat.retire(activity)
         activity.runOnUiThread {
             try {
                 val window = activity.window

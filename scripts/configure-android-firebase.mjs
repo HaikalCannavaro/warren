@@ -45,6 +45,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const root = fileURLToPath(new URL('../', import.meta.url));
     const result = configureAndroidFirebase(root, { required: process.argv.includes('--required'), encoded: process.env.FIREBASE_GOOGLE_SERVICES_BASE64 ?? '' });
-    console.log(result.configured ? 'Firebase configured for dev.harbor.workspace.' : 'Firebase config absent: Android delivery is available; push notifications are disabled.');
+    console.log(result.configured ? 'Legacy Firebase registration configured for dev.harbor.workspace; Agent delivery is retired.' : 'Firebase config absent; Agent chat and background delivery are retired.');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

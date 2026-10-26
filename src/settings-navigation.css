@@ -1,0 +1,9 @@
+.sidebar-settings{display:flex;align-items:center;gap:13px;width:100%;text-align:left;min-height:45px;padding:12px 15px;margin:0 0 10px;border-radius:8px;background:transparent;color:var(--muted);font-size:14px;border:1px solid transparent}
+.sidebar-settings svg{color:var(--menu-icon)}
+.sidebar-settings:hover{background:var(--surface-raised);color:var(--text)}
+.sidebar-settings.active{background:var(--teal-dim);border-color:color-mix(in srgb,var(--teal) 20%,transparent);color:var(--teal)}
+.sidebar-bottom{border-top:1px solid var(--line);padding-top:16px}
+.topbar-settings{display:none;color:var(--menu-icon);min-width:36px;min-height:36px;border-radius:8px}
+.topbar-settings.active{background:var(--teal-dim);box-shadow:inset 0 0 0 1px var(--line)}
+.sidebar-hidden .topbar-settings{display:inline-flex}
+@media(max-width:700px){.topbar-settings{display:inline-flex}.topbar-right{gap:6px}.bottom-nav{gap:2px;padding-left:6px;padding-right:6px;overflow-x:auto}.bottom-nav>button{flex:1 1 0;min-width:58px;font-size:12px}.bottom-nav>button>span{font-size:12px}.topbar-right .local-pill{max-width:120px}}

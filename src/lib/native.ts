@@ -56,7 +56,7 @@ export async function readBurrowTranscript(sessionId:string,taskId:string):Promi
 export type ObserverReadKind = 'hardware' | 'fleet' | 'tasks';
 export type ObserverResponse = {kind:'hardware';linux:string|null;gpu:string|null;warning:string|null} | {kind:'fleet'|'tasks';data:string};
 type ObserverWireEvent = {type:'result';result:ObserverResponse} | {type:'error';message:string};
-export function readObserver(sessionId:string,kind:ObserverReadKind,signal?:AbortSignal):Promise<ObserverResponse> {
+export function readObserver(sessionId:string,kind:ObserverReadKind,signal?:AbortSignal,includeArchived=false):Promise<ObserverResponse> {
   requireNative();
   if(signal?.aborted)return Promise.reject(new DOMException('Observer read cancelled.','AbortError'));
   return new Promise((resolve,reject)=>{
@@ -75,7 +75,7 @@ export function readObserver(sessionId:string,kind:ObserverReadKind,signal?:Abor
       else if(event.result.kind!==kind)finish(undefined,new Error('Observer received data for a different request type.'));
       else finish(event.result);
     };
-    void invoke('ssh_observer_start',{sessionId,requestId,kind,onEvent}).then(()=>{if(cancelled)cancelNative();}).catch(error=>finish(undefined,error));
+    void invoke('ssh_observer_start',{sessionId,requestId,kind,onEvent,includeArchived:kind==='tasks'&&includeArchived}).then(()=>{if(cancelled)cancelNative();}).catch(error=>finish(undefined,error));
   });
 }
 export async function probeHermes(url:string,token:string):Promise<HermesCapabilities> {

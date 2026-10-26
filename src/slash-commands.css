@@ -43,3 +43,11 @@
   .profile-form .transport-select { font-size: 16px; }
   .command-result { max-width: 100%; }
 }
+/* Command explanations are full-size reading text rather than microcopy. */
+.slash-menu-heading, .slash-menu-description, .slash-menu-reason,
+.slash-menu-state, .slash-menu-error, .command-result-state { font-size: var(--type-secondary); }
+.slash-menu-command, .command-result-content { font-size: var(--type-body); }
+.slash-menu-heading>span, .slash-menu-command>span, .command-result-header,
+.command-result-header time { font-size: var(--type-caption); }
+.slash-menu-category-header { font-size: var(--type-micro); }
+.slash-menu-heading { flex-wrap: wrap; }
